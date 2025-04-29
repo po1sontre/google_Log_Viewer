@@ -1,0 +1,793 @@
+// Theme handling
+const themeToggle = document.getElementById('themeToggle');
+const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)');
+
+function setTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('theme', theme);
+  themeToggle.innerHTML = theme === 'dark' ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+}
+
+function initTheme() {
+  const savedTheme = localStorage.getItem('theme');
+  if (savedTheme) {
+    setTheme(savedTheme);
+  } else {
+    setTheme(prefersDarkScheme.matches ? 'dark' : 'light');
+  }
+}
+
+// Add theme toggle event listener
+if (themeToggle) {
+  themeToggle.addEventListener('click', () => {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
+  });
+}
+
+// Initialize theme when the page loads
+document.addEventListener('DOMContentLoaded', () => {
+  initTheme();
+  init();
+});
+
+// State management
+const state = {
+  logs: [],
+  filteredLogs: [],
+  searchTerm: '',
+  timeRange: '24h',
+  logLevel: 'all',
+  functionName: '',
+  availableFunctions: new Set(),
+  allFunctions: new Set(),
+  autoRefresh: true
+};
+
+// DOM Elements
+const logContainer = document.getElementById('logContainer');
+const searchInput = document.getElementById('searchInput');
+const timeRangeSelect = document.getElementById('timeRange');
+const logLevelSelect = document.getElementById('logLevel');
+const functionSelect = document.getElementById('functionSelect');
+const logCount = document.getElementById('logCount');
+const autoRefreshToggle = document.getElementById('autoRefreshToggle');
+const autoRefreshLabel = document.querySelector('.auto-refresh-label');
+
+// Cache configuration
+const CACHE_CONFIG = {
+  maxAge: 5 * 60 * 1000, // 5 minutes
+  maxSize: 1000 // Maximum number of cached items
+};
+
+// Cache storage
+const cache = {
+  data: new Map(),
+  timestamps: new Map(),
+  
+  set(key, value) {
+    // Remove oldest item if cache is full
+    if (this.data.size >= CACHE_CONFIG.maxSize) {
+      const oldestKey = this.timestamps.entries().next().value[0];
+      this.delete(oldestKey);
+    }
+    
+    this.data.set(key, value);
+    this.timestamps.set(key, Date.now());
+  },
+  
+  get(key) {
+    const timestamp = this.timestamps.get(key);
+    if (!timestamp) return null;
+    
+    // Check if cache entry is expired
+    if (Date.now() - timestamp > CACHE_CONFIG.maxAge) {
+      this.delete(key);
+      return null;
+    }
+    
+    return this.data.get(key);
+  },
+  
+  delete(key) {
+    this.data.delete(key);
+    this.timestamps.delete(key);
+  },
+  
+  clear() {
+    this.data.clear();
+    this.timestamps.clear();
+  }
+};
+
+// Generate cache key from state
+function generateCacheKey() {
+  return JSON.stringify({
+    timeRange: state.timeRange,
+    functionName: state.functionName,
+    logLevel: state.logLevel,
+    searchTerm: state.searchTerm
+  });
+}
+
+// Progressive loading configuration
+const PROGRESSIVE_LOAD_CONFIG = {
+  initialBatchSize: 100, // Smaller initial batch for faster first render
+  batchSize: 200, // Increased batch size for faster loading
+  loadDelay: 50 // Reduced delay for smoother loading
+};
+
+// Simplified filter configuration
+const FILTER_CONFIG = {
+  timeRanges: {
+    '1h': 'Last Hour',
+    '6h': 'Last 6 Hours',
+    '12h': 'Last 12 Hours',
+    '24h': 'Last 24 Hours',
+    '7d': 'Last 7 Days',
+    '30d': 'Last 30 Days',
+    'custom': 'Custom Range'
+  }
+};
+
+// Add refresh button to the UI
+function addRefreshButton() {
+  const functionSelect = document.getElementById('functionSelect');
+  if (!functionSelect) return;
+
+  const refreshButton = document.createElement('button');
+  refreshButton.className = 'btn btn-outline-primary refresh-button ms-2';
+  refreshButton.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
+  refreshButton.title = 'Fetch fresh logs from server';
+  
+  refreshButton.addEventListener('click', async () => {
+    // Show loading state
+    refreshButton.disabled = true;
+    refreshButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+    
+    try {
+      // Clear the cache
+      cache.clear();
+      
+      // Fetch fresh logs
+      await loadLogs();
+      
+      // Show success state briefly
+      refreshButton.innerHTML = '<i class="fas fa-check"></i> Refreshed!';
+      setTimeout(() => {
+        refreshButton.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
+        refreshButton.disabled = false;
+      }, 2000);
+    } catch (error) {
+      console.error('Error refreshing logs:', error);
+      refreshButton.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error';
+      setTimeout(() => {
+        refreshButton.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
+        refreshButton.disabled = false;
+      }, 2000);
+    }
+  });
+  
+  // Insert the button after the function select
+  functionSelect.parentNode.insertBefore(refreshButton, functionSelect.nextSibling);
+}
+
+// Initialize the application
+async function init() {
+  // Load theme preference
+  const savedTheme = localStorage.getItem('theme') || 'light';
+  document.documentElement.setAttribute('data-theme', savedTheme);
+  themeToggle.checked = savedTheme === 'dark';
+
+  // Add filter UI
+  addFilterUI();
+  
+  // Add refresh button
+  addRefreshButton();
+
+  // Load initial logs
+  await loadLogs();
+
+  // Set up event listeners
+  setupEventListeners();
+}
+
+// Load logs from the server
+async function loadLogs() {
+  try {
+    console.log('Loading logs...');
+    console.log('Time range:', document.getElementById('timeRange').value);
+    
+    // Show loading state
+    logContainer.innerHTML = `
+      <div class="alert alert-info">
+        <i class="fas fa-spinner fa-spin me-2"></i>
+        Loading logs...
+      </div>
+    `;
+    
+    const startTime = getStartTime();
+    const endTime = new Date().toISOString();
+    console.log('Start time:', startTime);
+    console.log('End time:', endTime);
+    
+    const params = new URLSearchParams({
+      startTime,
+      endTime,
+      functionName: state.functionName,
+      severity: state.logLevel === 'all' ? '' : state.logLevel,
+      search: state.searchTerm
+    });
+
+    console.log('Fetching logs with params:', Object.fromEntries(params));
+    const response = await fetch(`/api/logs?${params}`);
+    const data = await response.json();
+    
+    if (data.error) {
+      throw new Error(data.error);
+    }
+    
+    console.log('Received logs:', data.logs?.length || 0);
+    state.logs = data.logs || [];
+    
+    // Extract unique functions from logs and add to allFunctions
+    state.logs.forEach(log => {
+      if (log.functionName && log.region) {
+        const func = {
+          name: log.functionName,
+          region: log.region,
+          fullPath: `${log.region}/${log.functionName}`
+        };
+        state.allFunctions.add(JSON.stringify(func));
+      }
+    });
+    
+    // Update function dropdown with all discovered functions
+    updateFunctionDropdown();
+    
+    applyFilters();
+    
+    renderLogs();
+    updateLogCount();
+  } catch (error) {
+    console.error('Error loading logs:', error);
+    showError('Failed to load logs: ' + error.message);
+  }
+}
+
+// Render logs in the container
+function renderLogs() {
+  if (!state.filteredLogs || state.filteredLogs.length === 0) {
+    logContainer.innerHTML = `
+      <div class="alert alert-info">
+        No logs found matching the current filters.
+      </div>
+    `;
+    return;
+  }
+
+  // Clear existing content
+  logContainer.innerHTML = '';
+
+  // Show loading indicator
+  const loadingIndicator = document.createElement('div');
+  loadingIndicator.className = 'loading-indicator';
+  loadingIndicator.innerHTML = `
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+    <div class="loading-text">Loading logs...</div>
+  `;
+  logContainer.appendChild(loadingIndicator);
+
+  // Progressive loading of logs
+  let currentIndex = 0;
+  let isLoading = true;
+
+  function loadNextBatch() {
+    if (!isLoading) return;
+
+    const batchSize = currentIndex === 0 ? 
+      PROGRESSIVE_LOAD_CONFIG.initialBatchSize : 
+      PROGRESSIVE_LOAD_CONFIG.batchSize;
+    
+    const endIndex = Math.min(currentIndex + batchSize, state.filteredLogs.length);
+    const fragment = document.createDocumentFragment();
+
+    for (let i = currentIndex; i < endIndex; i++) {
+      const log = state.filteredLogs[i];
+      const logElement = createLogEntry(log);
+      fragment.appendChild(logElement);
+    }
+
+    // Remove loading indicator if it's the first batch
+    if (currentIndex === 0) {
+      logContainer.innerHTML = '';
+    }
+
+    logContainer.appendChild(fragment);
+    currentIndex = endIndex;
+
+    // Update loading indicator
+    if (loadingIndicator) {
+      loadingIndicator.innerHTML = `
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <div class="loading-text">Loading logs... ${currentIndex} of ${state.filteredLogs.length}</div>
+      `;
+    }
+
+    // If there are more logs to load, schedule the next batch
+    if (currentIndex < state.filteredLogs.length) {
+      setTimeout(loadNextBatch, PROGRESSIVE_LOAD_CONFIG.loadDelay);
+    } else {
+      // Remove loading indicator when done
+      if (loadingIndicator && loadingIndicator.parentNode) {
+        loadingIndicator.parentNode.removeChild(loadingIndicator);
+      }
+      isLoading = false;
+    }
+  }
+
+  // Start loading the first batch
+  loadNextBatch();
+}
+
+// Update the log count display
+function updateLogCount() {
+  const totalLogs = state.logs?.length || 0;
+  const filteredLogs = state.filteredLogs?.length || 0;
+  
+  let message;
+  if (filteredLogs === 0) {
+    message = 'No logs found';
+  } else if (filteredLogs === totalLogs) {
+    message = `Showing ${totalLogs} logs`;
+  } else {
+    message = `Showing ${filteredLogs} logs (filtered from ${totalLogs} total)`;
+  }
+  
+  const logCount = document.getElementById('logCount');
+  if (logCount) {
+    logCount.textContent = message;
+  }
+}
+
+// Apply filters to logs
+function applyFilters() {
+  console.log('Applying filters:', {
+    functionName: state.functionName,
+    logLevel: state.logLevel,
+    searchTerm: state.searchTerm
+  });
+
+  if (!state.logs) {
+    state.filteredLogs = [];
+    return;
+  }
+
+  state.filteredLogs = state.logs.filter(log => {
+    // Function name filter
+    if (state.functionName && state.functionName !== 'all') {
+      if (!log.functionName || !log.region) return false;
+      const logFullPath = `${log.region}/${log.functionName}`;
+      if (logFullPath !== state.functionName) return false;
+    }
+
+    // Log level filter
+    if (state.logLevel && state.logLevel !== 'all') {
+      if (log.severity !== state.logLevel) return false;
+    }
+
+    // Search term filter
+    if (state.searchTerm) {
+      const searchLower = state.searchTerm.toLowerCase();
+      const textContent = JSON.stringify(log).toLowerCase();
+      if (!textContent.includes(searchLower)) return false;
+    }
+
+    return true;
+  });
+
+  console.log('Filtered logs:', state.filteredLogs.length);
+  updateLogCount(); // Update count after applying filters
+}
+
+// Format message content
+function formatMessage(message) {
+  if (!message) return '';
+  
+  try {
+    // Try to parse as JSON if it's a string
+    if (typeof message === 'string') {
+      // Check if it's a JSON string
+      if (message.trim().startsWith('{') || message.trim().startsWith('[')) {
+        const parsed = JSON.parse(message);
+        message = parsed;
+      }
+    }
+    
+    // If it's an object, format it nicely
+    if (typeof message === 'object') {
+      let jsonString = JSON.stringify(message, null, 2);
+      // Add search term highlighting if there's a search term
+      if (state.searchTerm) {
+        const searchRegex = new RegExp(`(${escapeRegExp(state.searchTerm)})`, 'gi');
+        jsonString = jsonString.replace(searchRegex, '<mark>$1</mark>');
+      }
+      return `<pre class="json-content">${jsonString}</pre>`;
+    }
+    
+    // If it's a string, format it as code and add highlighting
+    let textContent = message;
+    if (state.searchTerm) {
+      const searchRegex = new RegExp(`(${escapeRegExp(state.searchTerm)})`, 'gi');
+      textContent = textContent.replace(searchRegex, '<mark>$1</mark>');
+    }
+    return `<pre class="text-content">${textContent}</pre>`;
+  } catch (e) {
+    // If parsing fails, return as plain text with highlighting
+    let textContent = message;
+    if (state.searchTerm) {
+      const searchRegex = new RegExp(`(${escapeRegExp(state.searchTerm)})`, 'gi');
+      textContent = textContent.replace(searchRegex, '<mark>$1</mark>');
+    }
+    return `<pre class="text-content">${textContent}</pre>`;
+  }
+}
+
+// Utility function to escape special regex characters
+function escapeRegExp(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Get severity color
+function getSeverityColor(severity) {
+  const colors = {
+    DEBUG: 'secondary',
+    INFO: 'info',
+    WARNING: 'warning',
+    ERROR: 'danger',
+    CRITICAL: 'danger'
+  };
+  return colors[severity] || 'secondary';
+}
+
+// Get start time based on selected range
+function getStartTime() {
+  const timeRange = document.getElementById('timeRange').value;
+  
+  if (timeRange === 'custom') {
+    const startDate = document.getElementById('startDate').value;
+    if (!startDate) {
+      throw new Error('Please select a start date');
+    }
+    console.log('Getting start time:', startDate);
+    return new Date(startDate).toISOString();
+  }
+  
+  const now = new Date();
+  const ranges = {
+    '1h': 60 * 60 * 1000,
+    '6h': 6 * 60 * 60 * 1000,
+    '12h': 12 * 60 * 60 * 1000,
+    '24h': 24 * 60 * 60 * 1000,
+    '7d': 7 * 24 * 60 * 60 * 1000,
+    '30d': 30 * 24 * 60 * 60 * 1000
+  };
+  return new Date(now.getTime() - ranges[timeRange]).toISOString();
+}
+
+// Get end time based on selected range
+function getEndTime() {
+  const timeRange = document.getElementById('timeRange').value;
+  
+  if (timeRange === 'custom') {
+    const endDate = document.getElementById('endDate').value;
+    if (!endDate) {
+      throw new Error('Please select an end date');
+    }
+    console.log('Getting end time:', endDate);
+    return new Date(endDate).toISOString();
+  }
+  
+  return new Date().toISOString();
+}
+
+// Set up event listeners
+function setupEventListeners() {
+  // Search input
+  if (searchInput) {
+    searchInput.addEventListener('input', debounce(() => {
+      state.searchTerm = searchInput.value;
+      applyFilters();
+      renderLogs();
+    }, 300));
+  }
+
+  // Log level select
+  if (logLevelSelect) {
+    logLevelSelect.addEventListener('change', () => {
+      state.logLevel = logLevelSelect.value;
+      applyFilters();
+      renderLogs();
+    });
+  }
+
+  // Function select
+  if (functionSelect) {
+    functionSelect.addEventListener('change', () => {
+      state.functionName = functionSelect.value;
+      loadLogs(); // Reload logs when function changes
+    });
+  }
+
+  // Auto refresh toggle
+  if (autoRefreshToggle) {
+    autoRefreshToggle.addEventListener('change', () => {
+      state.autoRefresh = autoRefreshToggle.checked;
+      if (autoRefreshLabel) {
+        autoRefreshLabel.textContent = state.autoRefresh ? 'Auto On' : 'Auto Off';
+      }
+      if (state.autoRefresh) {
+        startAutoRefresh();
+      } else {
+        stopAutoRefresh();
+      }
+    });
+  }
+
+  // Time range select
+  if (timeRangeSelect) {
+    timeRangeSelect.addEventListener('change', () => {
+      state.timeRange = timeRangeSelect.value;
+      loadLogs();
+    });
+  }
+}
+
+// Utility functions
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
+function showError(message) {
+  const container = document.querySelector('.container-fluid');
+  if (!container) return;
+
+  const alert = document.createElement('div');
+  alert.className = 'alert alert-danger alert-dismissible fade show';
+  alert.innerHTML = `
+    ${message}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  `;
+  container.insertBefore(alert, container.firstChild);
+}
+
+// Update function dropdown based on all discovered functions
+function updateFunctionDropdown() {
+  // Clear existing options
+  functionSelect.innerHTML = '<option value="">All Functions</option>';
+
+  // Add each function as an option
+  Array.from(state.allFunctions)
+    .map(f => JSON.parse(f))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .forEach(func => {
+      const option = document.createElement('option');
+      option.value = func.fullPath;
+      option.textContent = `${func.name} (${func.region})`;
+      functionSelect.appendChild(option);
+    });
+
+  // Restore the selected function if one was selected
+  if (state.functionName) {
+    functionSelect.value = state.functionName;
+  }
+
+  // Enable the function dropdown
+  functionSelect.disabled = false;
+}
+
+// Add filter UI
+function addFilterUI() {
+  const filterCard = document.querySelector('.filter-card .card-body');
+  if (!filterCard) return;
+
+  // Add event listeners
+  const timeRangeSelect = document.getElementById('timeRange');
+  const customDateRange = document.getElementById('customDateRange');
+  const startDateInput = document.getElementById('startDate');
+  const endDateInput = document.getElementById('endDate');
+  
+  if (timeRangeSelect) {
+    timeRangeSelect.addEventListener('change', (e) => {
+      if (e.target.value === 'custom') {
+        if (customDateRange) {
+          customDateRange.style.display = 'block';
+          // Set default values for custom range
+          const now = new Date();
+          const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000);
+          if (startDateInput) startDateInput.value = oneDayAgo.toISOString().slice(0, 16);
+          if (endDateInput) endDateInput.value = now.toISOString().slice(0, 16);
+        }
+        // Trigger immediate load for custom range
+        loadLogs();
+      } else {
+        if (customDateRange) {
+          customDateRange.style.display = 'none';
+        }
+        state.timeRange = e.target.value;
+        loadLogs();
+      }
+    });
+  }
+  
+  // Add event listeners for custom date inputs
+  function handleDateChange() {
+    if (timeRangeSelect && timeRangeSelect.value === 'custom') {
+      console.log('Date changed, loading logs...');
+      console.log('Start date:', startDateInput?.value);
+      console.log('End date:', endDateInput?.value);
+      loadLogs();
+    }
+  }
+  
+  if (startDateInput) startDateInput.addEventListener('change', handleDateChange);
+  if (endDateInput) endDateInput.addEventListener('change', handleDateChange);
+}
+
+// Format timestamp
+function formatTimestamp(timestamp) {
+  if (!timestamp) return 'Unknown Time';
+  
+  let date;
+  if (typeof timestamp === 'object' && timestamp.seconds) {
+    // Handle Google Cloud timestamp format
+    date = new Date(timestamp.seconds * 1000 + (timestamp.nanos || 0) / 1000000);
+  } else {
+    date = new Date(timestamp);
+  }
+  
+  if (!(date instanceof Date) || isNaN(date)) {
+    return 'Invalid Time';
+  }
+  
+  // Format with local timezone
+  return date.toLocaleString(undefined, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+    timeZoneName: 'short'
+  });
+}
+
+// Create log entry element
+function createLogEntry(log) {
+  const logEntry = document.createElement('div');
+  logEntry.className = `log-entry ${log.severity?.toLowerCase() || 'info'}`;
+  
+  const formattedTime = formatTimestamp(log.timestamp);
+  const functionName = log.functionName || 'Unknown Function';
+  const region = log.region || 'Unknown Region';
+
+  // Format raw data with search highlighting
+  let rawData = JSON.stringify(log, null, 2);
+  if (state.searchTerm) {
+    const searchRegex = new RegExp(`(${escapeRegExp(state.searchTerm)})`, 'gi');
+    rawData = rawData.replace(searchRegex, '<mark>$1</mark>');
+  }
+
+  // Create basic log entry structure
+  logEntry.innerHTML = `
+    <div class="log-header">
+      <div class="log-header-main">
+        <span class="log-timestamp">${formattedTime}</span>
+        <div class="log-badges">
+          <span class="badge bg-secondary">${region}</span>
+          <span class="badge bg-primary">${functionName}</span>
+          <span class="badge bg-${getSeverityColor(log.severity)}">${log.severity || 'INFO'}</span>
+        </div>
+      </div>
+      <div class="log-header-actions">
+        <button class="btn btn-sm btn-outline-secondary copy-button" data-copy-target="raw-${log.insertId}">
+          <i class="fas fa-copy"></i> Copy
+        </button>
+        <button class="btn btn-sm btn-outline-secondary raw-data-toggle" data-bs-toggle="collapse" data-bs-target="#raw-${log.insertId}">
+          <i class="fas fa-code"></i> Raw Data
+        </button>
+      </div>
+    </div>
+    <div class="log-content">
+      ${formatMessage(log.textPayload || log.jsonPayload || '')}
+    </div>
+    <div class="log-footer">
+      ${log.insertId ? `<div class="log-footer-item"><i class="fas fa-fingerprint"></i> ${log.insertId}</div>` : ''}
+      ${log.labels?.execution_id ? `
+        <div class="log-footer-item">
+          <i class="fas fa-terminal"></i>
+          <a href="#" class="execution-id-link" data-execution-id="${log.labels.execution_id}">
+            ${log.labels.execution_id}
+          </a>
+        </div>
+      ` : ''}
+      ${log.trace ? `<div class="log-footer-item"><i class="fas fa-project-diagram"></i> ${log.trace}</div>` : ''}
+    </div>
+    <div class="collapse raw-data" id="raw-${log.insertId}">
+      <div class="raw-data-content">
+        <pre>${rawData}</pre>
+      </div>
+    </div>
+  `;
+
+  // Add click handler for copy button
+  const copyButton = logEntry.querySelector('.copy-button');
+  if (copyButton) {
+    copyButton.addEventListener('click', () => {
+      const targetId = copyButton.getAttribute('data-copy-target');
+      const targetElement = document.getElementById(targetId);
+      if (targetElement) {
+        const text = targetElement.querySelector('pre').textContent;
+        navigator.clipboard.writeText(text).then(() => {
+          // Change button text and icon
+          const originalContent = copyButton.innerHTML;
+          copyButton.innerHTML = '<i class="fas fa-check"></i> Copied!';
+          copyButton.classList.add('copied');
+          
+          // Reset button after 2 seconds
+          setTimeout(() => {
+            copyButton.innerHTML = originalContent;
+            copyButton.classList.remove('copied');
+          }, 2000);
+        }).catch(err => {
+          console.error('Failed to copy:', err);
+          // Show error state
+          const originalContent = copyButton.innerHTML;
+          copyButton.innerHTML = '<i class="fas fa-times"></i> Failed';
+          copyButton.classList.add('error');
+          
+          // Reset button after 2 seconds
+          setTimeout(() => {
+            copyButton.innerHTML = originalContent;
+            copyButton.classList.remove('error');
+          }, 2000);
+        });
+      }
+    });
+  }
+
+  // Add click handler for execution ID
+  const executionIdLink = logEntry.querySelector('.execution-id-link');
+  if (executionIdLink) {
+    executionIdLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      const executionId = executionIdLink.getAttribute('data-execution-id');
+      if (executionId) {
+        // Update search input and trigger search
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+          searchInput.value = executionId;
+          state.searchTerm = executionId;
+          applyFilters();
+          renderLogs();
+        }
+      }
+    });
+  }
+
+  return logEntry;
+}
