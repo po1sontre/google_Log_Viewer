@@ -49,7 +49,11 @@ npm install
 ```
 
 3. Create required files:
-- Copy `.env.example` to `.env` and update values
+- Copy `.env.example` to `.env` and update the values:
+  ```bash
+  cp .env.example .env
+  ```
+- Replace `your-project-id` with your actual Google Cloud project ID
 - Add your service account key file
 
 4. Start the server:
