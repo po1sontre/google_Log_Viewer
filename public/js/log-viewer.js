@@ -29,6 +29,15 @@ if (themeToggle) {
 // Initialize theme when the page loads
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
+  // Try to restore cache from localStorage
+  if (cache.restoreFromStorage()) {
+    const cacheKey = generateCacheKey();
+    const cachedLogs = cache.get(cacheKey);
+    if (cachedLogs) {
+      state.logs = cachedLogs;
+      renderLogs();
+    }
+  }
   init();
 });
 
@@ -68,7 +77,8 @@ const loadingToastInstance = new bootstrap.Toast(loadingToast, {
 // Cache configuration
 const CACHE_CONFIG = {
   maxAge: 5 * 60 * 1000, // 5 minutes
-  maxSize: 1000 // Maximum number of cached items
+  maxSize: 1000, // Maximum number of cached items
+  localStorageKey: 'logViewerCache'
 };
 
 // Cache storage
@@ -85,6 +95,18 @@ const cache = {
     
     this.data.set(key, value);
     this.timestamps.set(key, Date.now());
+    
+    // Also store in localStorage
+    try {
+      const cacheData = {
+        data: Array.from(this.data.entries()),
+        timestamps: Array.from(this.timestamps.entries()),
+        lastUpdated: Date.now()
+      };
+      localStorage.setItem(CACHE_CONFIG.localStorageKey, JSON.stringify(cacheData));
+    } catch (e) {
+      console.warn('Failed to store cache in localStorage:', e);
+    }
   },
   
   get(key) {
@@ -108,6 +130,25 @@ const cache = {
   clear() {
     this.data.clear();
     this.timestamps.clear();
+    localStorage.removeItem(CACHE_CONFIG.localStorageKey);
+  },
+  
+  restoreFromStorage() {
+    try {
+      const storedCache = localStorage.getItem(CACHE_CONFIG.localStorageKey);
+      if (storedCache) {
+        const cacheData = JSON.parse(storedCache);
+        // Check if cache is still valid
+        if (Date.now() - cacheData.lastUpdated <= CACHE_CONFIG.maxAge) {
+          this.data = new Map(cacheData.data);
+          this.timestamps = new Map(cacheData.timestamps);
+          return true;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to restore cache from localStorage:', e);
+    }
+    return false;
   }
 };
 
@@ -123,9 +164,10 @@ function generateCacheKey() {
 
 // Progressive loading configuration
 const PROGRESSIVE_LOAD_CONFIG = {
-  initialBatchSize: 100, // Smaller initial batch for faster first render
-  batchSize: 200, // Increased batch size for faster loading
-  loadDelay: 50 // Reduced delay for smoother loading
+  initialBatchSize: 100,  // Number of logs to load initially
+  batchSize: 200,         // Number of logs to load in each subsequent batch
+  loadDelay: 50,          // Delay between batches in milliseconds
+  scrollThreshold: 200    // Distance from bottom to trigger next load
 };
 
 // Simplified filter configuration
@@ -183,35 +225,6 @@ function addRefreshButton() {
   functionSelect.parentNode.insertBefore(refreshButton, functionSelect.nextSibling);
 }
 
-// Update URL state
-function updateURLState(reloadLogs = true) {
-  const params = new URLSearchParams();
-  
-  // Only include non-default values in URL
-  if (state.searchTerm) {
-    params.set('search', state.searchTerm);
-  }
-  if (state.timeRange !== '24h') {
-    params.set('timeRange', state.timeRange);
-  }
-  if (state.logLevel !== 'all') {
-    params.set('logLevel', state.logLevel);
-  }
-  if (state.functionName) {
-    params.set('functionName', state.functionName);
-  }
-  
-  const newUrl = `?${params.toString()}`;
-  
-  // Only update URL if it's different from current URL
-  if (newUrl !== window.location.search) {
-    window.history.pushState(null, '', newUrl);
-    if (reloadLogs) {
-      loadLogs();
-    }
-  }
-}
-
 // Read state from URL
 function readURLState() {
   const params = new URLSearchParams(window.location.search);
@@ -222,10 +235,14 @@ function readURLState() {
   state.logLevel = 'all';
   state.functionName = '';
   state.sortDirection = 'desc'; // Always default to descending
+  state.logs = []; // Clear existing logs
+  state.filteredLogs = []; // Clear filtered logs
+  state.isSearchView = false; // Reset search view flag
   
   // Update state from URL parameters
   if (params.has('search')) {
     state.searchTerm = params.get('search');
+    state.isSearchView = true;
   }
   if (params.has('timeRange')) {
     state.timeRange = params.get('timeRange');
@@ -253,6 +270,39 @@ window.addEventListener('popstate', (event) => {
   loadLogs();
 });
 
+// Update URL state
+function updateURLState(reloadLogs = true) {
+  const params = new URLSearchParams();
+  
+  // Only include non-default values in URL
+  if (state.searchTerm) {
+    params.set('search', state.searchTerm);
+  }
+  if (state.timeRange !== '24h') {
+    params.set('timeRange', state.timeRange);
+  }
+  if (state.logLevel !== 'all') {
+    params.set('logLevel', state.logLevel);
+  }
+  if (state.functionName) {
+    params.set('functionName', state.functionName);
+  }
+  
+  const newUrl = `?${params.toString()}`;
+  
+  // Only update URL if it's different from current URL
+  if (newUrl !== window.location.search) {
+    window.history.pushState(null, '', newUrl);
+    if (reloadLogs) {
+      // Clear existing logs before loading new ones
+      state.logs = [];
+      state.filteredLogs = [];
+      logContainer.innerHTML = ''; // Clear the log container
+      loadLogs();
+    }
+  }
+}
+
 // Initialize the application
 async function init() {
   // Load theme preference
@@ -279,8 +329,18 @@ async function init() {
 // Load logs from the server
 async function loadLogs() {
   try {
-    // Show loading toast
     loadingToastInstance.show();
+    
+    const cacheKey = generateCacheKey();
+    const cachedLogs = cache.get(cacheKey);
+    
+    // If we have cached logs, show them immediately
+    if (cachedLogs) {
+      state.logs = cachedLogs;
+      state.filteredLogs = cachedLogs;
+      renderLogs();
+      // Don't hide loading toast yet as we'll check for updates
+    }
     
     const startTime = getStartTime();
     const endTime = getEndTime();
@@ -291,7 +351,7 @@ async function loadLogs() {
       endTime,
       severity: state.logLevel,
       page: 1,
-      pageSize: 1000
+      pageSize: 10000  // Increased to get all logs
     });
 
     // Add search term if it exists
@@ -317,52 +377,79 @@ async function loadLogs() {
       throw new Error(data.error || 'Failed to fetch logs');
     }
 
-    // Update state with new logs
-    state.logs = data.logs;
-    state.filteredLogs = data.logs;
-    
-    // Sort the logs after loading
-    sortLogs();
-    
-    // Update available functions from logs
-    data.logs.forEach(log => {
-      if (log.functionName && log.region) {
-        const functionInfo = {
-          name: log.functionName,
-          region: log.region,
-          fullPath: `${log.region}/${log.functionName}`
-        };
-        state.allFunctions.add(JSON.stringify(functionInfo));
-      }
-    });
-    
-    // Update function dropdown
-    updateFunctionDropdown();
-    
-    // Update log count
-    updateLogCount();
-    
-    // Hide loading toast
-    loadingToastInstance.hide();
-    
-    return data;
+    // Check if we have new logs
+    const newLogs = data.logs || [];
+    const hasNewLogs = JSON.stringify(newLogs) !== JSON.stringify(state.logs);
+
+    if (hasNewLogs) {
+      // Update state with new logs
+      state.logs = newLogs;
+      state.filteredLogs = newLogs;
+      
+      // Sort the logs after loading
+      sortLogs();
+      
+      // Update available functions from logs
+      state.allFunctions.clear(); // Clear existing functions
+      newLogs.forEach(log => {
+        if (log.functionName && log.region) {
+          const functionInfo = {
+            name: log.functionName,
+            region: log.region,
+            fullPath: `${log.region}/${log.functionName}`
+          };
+          state.allFunctions.add(JSON.stringify(functionInfo));
+        }
+      });
+      
+      // Update function dropdown
+      updateFunctionDropdown();
+      
+      // Update log count
+      updateLogCount();
+      
+      // Cache the new logs
+      cache.set(cacheKey, state.logs);
+      
+      // Render the updated logs
+      renderLogs();
+    } else if (!cachedLogs) {
+      // If we didn't have cached logs and got empty response
+      state.logs = [];
+      state.filteredLogs = [];
+      renderLogs();
+    }
+
   } catch (error) {
     console.error('Error loading logs:', error);
     showError(error.message);
-    // Hide loading toast on error
+    // Only clear logs on error if we didn't have cached logs
+    if (!cache.get(generateCacheKey())) {
+      state.logs = [];
+      state.filteredLogs = [];
+      renderLogs();
+    }
+  } finally {
     loadingToastInstance.hide();
-    throw error;
   }
 }
 
 // Render logs in the container
 function renderLogs() {
-  if (!state.filteredLogs || state.filteredLogs.length === 0) {
-    logContainer.innerHTML = `
-      <div class="alert alert-info">
-        No logs found matching the current filters.
-      </div>
-    `;
+  if (!state.logs || state.logs.length === 0) {
+    if (state.isSearchView) {
+      logContainer.innerHTML = `
+        <div class="alert alert-info">
+          No logs found matching the current filters.
+        </div>
+      `;
+    } else {
+      logContainer.innerHTML = `
+        <div class="alert alert-info">
+          Loading logs...
+        </div>
+      `;
+    }
     return;
   }
 
@@ -432,6 +519,21 @@ function renderLogs() {
 
   // Start loading the first batch
   loadNextBatch();
+
+  // Add scroll event listener for infinite scroll
+  const handleScroll = debounce(() => {
+    if (!isLoading && currentIndex < state.filteredLogs.length) {
+      const scrollPosition = window.innerHeight + window.scrollY;
+      const documentHeight = document.documentElement.scrollHeight;
+      
+      if (documentHeight - scrollPosition < PROGRESSIVE_LOAD_CONFIG.scrollThreshold) {
+        isLoading = true;
+        loadNextBatch();
+      }
+    }
+  }, 100);
+
+  window.addEventListener('scroll', handleScroll);
 }
 
 // Update the log count display
@@ -563,6 +665,10 @@ function setupEventListeners() {
       const newSearchTerm = searchInput.value.trim();
       state.searchTerm = newSearchTerm;
       state.isSearchView = !!newSearchTerm;
+      // Clear existing logs when search changes
+      state.logs = [];
+      state.filteredLogs = [];
+      logContainer.innerHTML = ''; // Clear the log container
       updateURLState();
     }, 300));
   }
