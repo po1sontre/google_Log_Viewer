@@ -1111,3 +1111,51 @@ mark {
 [data-theme="dark"] #loadingToast .toast-body {
   color: var(--bs-light);
 }
+
+/* Mode Toggle Styles */
+.mode-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.mode-toggle-btn i {
+  font-size: 1.1rem;
+}
+
+.mode-toggle-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.mode-toggle-btn:active {
+  transform: translateY(0);
+}
+
+/* Online Mode Styles */
+.mode-toggle-btn.online {
+  background-color: var(--bs-primary);
+  color: white;
+  border-color: var(--bs-primary);
+}
+
+.mode-toggle-btn.online:hover {
+  background-color: var(--bs-primary-dark);
+  border-color: var(--bs-primary-dark);
+}
+
+/* Offline Mode Styles */
+.mode-toggle-btn.offline {
+  background-color: var(--bs-secondary);
+  color: white;
+  border-color: var(--bs-secondary);
+}
+
+.mode-toggle-btn.offline:hover {
+  background-color: var(--bs-secondary-dark);
+  border-color: var(--bs-secondary-dark);
+}

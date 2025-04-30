@@ -54,7 +54,8 @@ const state = {
   autoRefresh: true,
   sortDirection: 'desc',
   isSearchView: false,
-  history: []
+  history: [],
+  isOnlineMode: true  // Default to online mode
 };
 
 // DOM Elements
@@ -68,6 +69,7 @@ const autoRefreshToggle = document.getElementById('autoRefreshToggle');
 const autoRefreshLabel = document.querySelector('.auto-refresh-label');
 const sortDirectionBtn = document.getElementById('sortDirectionBtn');
 const loadingToast = document.getElementById('loadingToast');
+const modeToggle = document.getElementById('modeToggle');
 
 // Initialize Bootstrap toast
 const loadingToastInstance = new bootstrap.Toast(loadingToast, {
@@ -182,6 +184,36 @@ const FILTER_CONFIG = {
     'custom': 'Custom Range'
   }
 };
+
+// Mode toggle handler
+function toggleMode() {
+  state.isOnlineMode = !state.isOnlineMode;
+  const modeToggle = document.getElementById('modeToggle');
+  
+  if (state.isOnlineMode) {
+    modeToggle.innerHTML = '<i class="fas fa-wifi"></i> Online Mode';
+    modeToggle.classList.remove('offline');
+    modeToggle.classList.add('online');
+  } else {
+    modeToggle.innerHTML = '<i class="fas fa-database"></i> Offline Mode';
+    modeToggle.classList.remove('online');
+    modeToggle.classList.add('offline');
+  }
+  
+  // When switching to offline mode, just apply local filters to current logs
+  if (!state.isOnlineMode) {
+    applyLocalFilters();
+    renderLogs();
+  } else {
+    // When switching to online mode, reload with server-side filtering
+    loadLogs();
+  }
+}
+
+// Add mode toggle event listener
+if (modeToggle) {
+  modeToggle.addEventListener('click', toggleMode);
+}
 
 // Add refresh button to the UI
 function addRefreshButton() {
@@ -334,12 +366,23 @@ async function loadLogs() {
     const cacheKey = generateCacheKey();
     const cachedLogs = cache.get(cacheKey);
     
-    // If we have cached logs, show them immediately
-    if (cachedLogs) {
-      state.logs = cachedLogs;
-      state.filteredLogs = cachedLogs;
-      renderLogs();
-      // Don't hide loading toast yet as we'll check for updates
+    // In offline mode, use cached logs if available
+    if (!state.isOnlineMode) {
+      if (cachedLogs) {
+        state.logs = cachedLogs;
+        state.filteredLogs = cachedLogs;
+        applyLocalFilters(); // Apply any existing filters
+        renderLogs();
+        loadingToastInstance.hide();
+        return;
+      } else if (state.logs.length > 0) {
+        // If no cached logs but we have current logs, use them
+        state.filteredLogs = [...state.logs];
+        applyLocalFilters();
+        renderLogs();
+        loadingToastInstance.hide();
+        return;
+      }
     }
     
     const startTime = getStartTime();
@@ -351,17 +394,17 @@ async function loadLogs() {
       endTime,
       severity: state.logLevel,
       page: 1,
-      pageSize: 10000  // Increased to get all logs
+      pageSize: 10000
     });
 
-    // Add search term if it exists
-    if (state.searchTerm) {
-      params.set('search', state.searchTerm.trim());
-    }
-
-    // Add function name if it exists
-    if (state.functionName) {
-      params.set('functionName', state.functionName);
+    // In online mode, send all filters to server
+    if (state.isOnlineMode) {
+      if (state.searchTerm) {
+        params.set('search', state.searchTerm.trim());
+      }
+      if (state.functionName) {
+        params.set('functionName', state.functionName);
+      }
     }
 
     const url = `/api/logs?${params.toString()}`;
@@ -377,54 +420,47 @@ async function loadLogs() {
       throw new Error(data.error || 'Failed to fetch logs');
     }
 
-    // Check if we have new logs
-    const newLogs = data.logs || [];
-    const hasNewLogs = JSON.stringify(newLogs) !== JSON.stringify(state.logs);
-
-    if (hasNewLogs) {
-      // Update state with new logs
-      state.logs = newLogs;
-      state.filteredLogs = newLogs;
-      
-      // Sort the logs after loading
-      sortLogs();
-      
-      // Update available functions from logs
-      state.allFunctions.clear(); // Clear existing functions
-      newLogs.forEach(log => {
-        if (log.functionName && log.region) {
-          const functionInfo = {
-            name: log.functionName,
-            region: log.region,
-            fullPath: `${log.region}/${log.functionName}`
-          };
-          state.allFunctions.add(JSON.stringify(functionInfo));
-        }
-      });
-      
-      // Update function dropdown
-      updateFunctionDropdown();
-      
-      // Update log count
-      updateLogCount();
-      
-      // Cache the new logs
-      cache.set(cacheKey, state.logs);
-      
-      // Render the updated logs
-      renderLogs();
-    } else if (!cachedLogs) {
-      // If we didn't have cached logs and got empty response
-      state.logs = [];
-      state.filteredLogs = [];
-      renderLogs();
+    // Update state with new logs
+    state.logs = data.logs || [];
+    state.filteredLogs = data.logs || [];
+    
+    // In offline mode, apply local filters
+    if (!state.isOnlineMode) {
+      applyLocalFilters();
     }
-
+    
+    // Sort the logs after loading
+    sortLogs();
+    
+    // Update available functions from logs
+    state.allFunctions.clear();
+    state.logs.forEach(log => {
+      if (log.functionName && log.region) {
+        const functionInfo = {
+          name: log.functionName,
+          region: log.region,
+          fullPath: `${log.region}/${log.functionName}`
+        };
+        state.allFunctions.add(JSON.stringify(functionInfo));
+      }
+    });
+    
+    // Update function dropdown
+    updateFunctionDropdown();
+    
+    // Update log count
+    updateLogCount();
+    
+    // Cache the logs
+    cache.set(cacheKey, state.logs);
+    
+    // Render the logs
+    renderLogs();
   } catch (error) {
     console.error('Error loading logs:', error);
     showError(error.message);
-    // Only clear logs on error if we didn't have cached logs
-    if (!cache.get(generateCacheKey())) {
+    // Only clear logs on error if we didn't have cached logs or current logs
+    if (!cache.get(generateCacheKey()) && state.logs.length === 0) {
       state.logs = [];
       state.filteredLogs = [];
       renderLogs();
@@ -432,6 +468,87 @@ async function loadLogs() {
   } finally {
     loadingToastInstance.hide();
   }
+}
+
+// Apply local filters to logs
+function applyLocalFilters() {
+  let filtered = [...state.logs];
+  
+  // Apply severity filter
+  if (state.logLevel !== 'all') {
+    filtered = filtered.filter(log => log.severity === state.logLevel);
+  }
+  
+  // Apply function name filter
+  if (state.functionName) {
+    const [region, functionName] = state.functionName.split('/');
+    filtered = filtered.filter(log => 
+      log.functionName === functionName && 
+      log.region === region
+    );
+  }
+  
+  // Apply search term filter
+  if (state.searchTerm) {
+    const searchTerm = state.searchTerm.toLowerCase();
+    filtered = filtered.filter(log => {
+      // Search in text payload
+      if (log.textPayload && log.textPayload.toLowerCase().includes(searchTerm)) {
+        return true;
+      }
+      
+      // Search in JSON payload
+      if (log.jsonPayload) {
+        const jsonString = JSON.stringify(log.jsonPayload).toLowerCase();
+        if (jsonString.includes(searchTerm)) {
+          return true;
+        }
+      }
+      
+      // Search in function name
+      if (log.functionName && log.functionName.toLowerCase().includes(searchTerm)) {
+        return true;
+      }
+      
+      // Search in region
+      if (log.region && log.region.toLowerCase().includes(searchTerm)) {
+        return true;
+      }
+      
+      // Search in severity
+      if (log.severity && log.severity.toLowerCase().includes(searchTerm)) {
+        return true;
+      }
+      
+      // Search in timestamp
+      if (log.timestamp) {
+        let timestampStr;
+        if (typeof log.timestamp === 'object' && log.timestamp.seconds) {
+          // Handle Google Cloud timestamp format
+          const date = new Date(log.timestamp.seconds * 1000 + (log.timestamp.nanos || 0) / 1000000);
+          timestampStr = date.toISOString();
+        } else if (typeof log.timestamp === 'string') {
+          timestampStr = log.timestamp;
+        } else if (log.timestamp instanceof Date) {
+          timestampStr = log.timestamp.toISOString();
+        }
+        
+        if (timestampStr && timestampStr.toLowerCase().includes(searchTerm)) {
+          return true;
+        }
+      }
+
+      // Search in execution ID
+      if (log.labels?.execution_id && log.labels.execution_id.toLowerCase().includes(searchTerm)) {
+        return true;
+      }
+      
+      return false;
+    });
+  }
+  
+  state.filteredLogs = filtered;
+  updateLogCount();
 }
 
 // Render logs in the container
@@ -538,19 +655,22 @@ function renderLogs() {
 
 // Update the log count display
 function updateLogCount() {
-  const totalLogs = state.logs?.length || 0;
-  const filteredLogs = state.filteredLogs?.length || 0;
+  const totalLogs = state.logs.length;
+  const filteredLogs = state.filteredLogs.length;
   
   let message;
   if (filteredLogs === 0) {
-    message = 'No logs found';
+    if (state.searchTerm) {
+      message = 'No logs found matching your search';
+    } else {
+      message = 'No logs found';
+    }
   } else if (filteredLogs === totalLogs) {
     message = `Showing ${totalLogs} logs`;
   } else {
     message = `Showing ${filteredLogs} logs (filtered from ${totalLogs} total)`;
   }
   
-  const logCount = document.getElementById('logCount');
   if (logCount) {
     logCount.textContent = message;
   }
@@ -665,11 +785,15 @@ function setupEventListeners() {
       const newSearchTerm = searchInput.value.trim();
       state.searchTerm = newSearchTerm;
       state.isSearchView = !!newSearchTerm;
-      // Clear existing logs when search changes
-      state.logs = [];
-      state.filteredLogs = [];
-      logContainer.innerHTML = ''; // Clear the log container
-      updateURLState();
+      
+      if (!state.isOnlineMode) {
+        // In offline mode, apply filters immediately
+        applyLocalFilters();
+        renderLogs();
+      } else {
+        // In online mode, update URL and reload
+        updateURLState();
+      }
     }, 300));
   }
 
@@ -677,7 +801,12 @@ function setupEventListeners() {
   if (logLevelSelect) {
     logLevelSelect.addEventListener('change', () => {
       state.logLevel = logLevelSelect.value;
-      updateURLState();
+      if (!state.isOnlineMode) {
+        applyLocalFilters();
+        renderLogs();
+      } else {
+        updateURLState();
+      }
     });
   }
 
@@ -685,7 +814,12 @@ function setupEventListeners() {
   if (functionSelect) {
     functionSelect.addEventListener('change', () => {
       state.functionName = functionSelect.value;
-      updateURLState();
+      if (!state.isOnlineMode) {
+        applyLocalFilters();
+        renderLogs();
+      } else {
+        updateURLState();
+      }
     });
   }
 
@@ -708,7 +842,8 @@ function setupEventListeners() {
   if (timeRangeSelect) {
     timeRangeSelect.addEventListener('change', () => {
       state.timeRange = timeRangeSelect.value;
-      updateURLState();
+      // Always reload logs when time range changes
+      loadLogs();
     });
   }
 
