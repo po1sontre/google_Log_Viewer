@@ -137,12 +137,14 @@ app.get('/api/logs', async (req, res) => {
       functionName,
       severity,
       search,
+      page = 1,
+      pageSize = 1000,
+      sort = 'desc',
       timestamp = Date.now()
     } = req.query;
 
     // Initialize variables at the top level
     let results = [];
-    let searchTerms = [];
     let totalEntries = [];
 
     // Create base filter
@@ -176,170 +178,99 @@ app.get('/api/logs', async (req, res) => {
     }
 
     console.log('Constructed filter:', filter);
+    console.log('Sort direction:', sort);
 
     try {
-      // Get logs without pagination
+      // Get logs with pagination
       console.log('Fetching logs from Cloud Logging...');
-      
-      // Make sure we have a valid token before proceeding 
-      const token = await getAccessToken();
-      if (!token) {
-        throw new Error('Failed to get access token');
-      }
-      
       const [entries] = await logging.getEntries({
         filter,
-        orderBy: 'timestamp desc',
-        pageSize: 10000 // Increased from 1000 to 10000
+        orderBy: `timestamp ${sort}`,
+        pageSize: parseInt(pageSize),
+        pageToken: parseInt(page) > 1 ? (parseInt(page) - 1).toString() : undefined
       });
 
       console.log(`Received ${entries.length} raw log entries from Cloud Logging`);
       
-      // Debug the first entry to see its structure
-      if (entries.length > 0) {
-        const firstEntry = entries[0];
-        console.log('First entry structure:', JSON.stringify(firstEntry, null, 2).substring(0, 500) + '...');
-      }
-      
-      // Get the raw data directly from the entries with improved error handling
-      const rawLogs = entries.map((entry, index) => {
+      // Get the raw data directly from the entries
+      const rawLogs = entries.map(entry => {
         try {
-          // Check if entry is valid before processing
-          if (!entry) {
-            console.error(`Entry at index ${index} is undefined or null`);
-            return createDefaultLogEntry();
-          }
-          
           // Convert to plain object and remove methods
-          let plainEntry;
-          try {
-            plainEntry = JSON.parse(JSON.stringify(entry));
-          } catch (jsonError) {
-            console.error(`Error in JSON.stringify for entry at index ${index}:`, jsonError);
-            plainEntry = { ...entry };
-          }
+          const plainEntry = JSON.parse(JSON.stringify(entry));
           
-          // Ensure resource and labels exist with detailed logging
-          const resource = safeGet(plainEntry, 'resource', {});
-          const labels = safeGet(resource, 'labels', {});
+          // Ensure resource and labels exist
+          const resource = plainEntry.resource || {};
+          const labels = resource.labels || {};
           
           // Extract function name and region with proper fallbacks
-          const functionName = labels.function_name || 'Unknown';
-          const region = labels.region || 'Unknown';
+          const functionName = labels.function_name || '';
+          const region = labels.region || '';
           
-          // Debug log to see what we're getting
-          console.log('Resource labels:', labels);
-          console.log('Extracted function name:', functionName);
-          console.log('Extracted region:', region);
-          
-          // Handle message extraction
-          const textPayload = safeGet(plainEntry, 'textPayload');
-          const jsonPayload = safeGet(plainEntry, 'jsonPayload');
-          const message = textPayload || 
-                          (jsonPayload ? JSON.stringify(jsonPayload, null, 2) : 'No message available');
-          
-          // Ensure timestamp exists and is properly formatted
-          let timestamp;
-          if (plainEntry.timestamp) {
-            if (plainEntry.timestamp.seconds) {
-              // Handle Google Cloud timestamp format
-              timestamp = new Date(plainEntry.timestamp.seconds * 1000 + 
-                                (plainEntry.timestamp.nanos || 0) / 1000000).toISOString();
-            } else {
-              timestamp = new Date(plainEntry.timestamp).toISOString();
-            }
-          } else {
-            console.warn(`Missing timestamp for entry at index ${index}`);
-            timestamp = new Date().toISOString();
-          }
-          
-          // Create the log entry with the extracted values
-          const logEntry = {
-            timestamp: timestamp,
-            labels: safeGet(plainEntry, 'labels', {}),
-            insertId: safeGet(plainEntry, 'insertId', ''),
-            httpRequest: safeGet(plainEntry, 'httpRequest'),
+          return {
+            timestamp: plainEntry.timestamp,
+            labels: plainEntry.labels || {},
+            insertId: plainEntry.insertId,
+            httpRequest: plainEntry.httpRequest,
             resource: resource,
-            severity: safeGet(plainEntry, 'severity', 'INFO'),
-            logName: safeGet(plainEntry, 'logName', ''),
-            operation: safeGet(plainEntry, 'operation'),
-            trace: safeGet(plainEntry, 'trace'),
-            sourceLocation: safeGet(plainEntry, 'sourceLocation'),
-            receiveTimestamp: safeGet(plainEntry, 'receiveTimestamp'),
-            spanId: safeGet(plainEntry, 'spanId'),
-            traceSampled: safeGet(plainEntry, 'traceSampled'),
-            split: safeGet(plainEntry, 'split'),
-            textPayload: textPayload,
-            jsonPayload: jsonPayload,
-            message: message,
+            severity: plainEntry.severity,
+            logName: plainEntry.logName,
+            operation: plainEntry.operation,
+            trace: plainEntry.trace,
+            sourceLocation: plainEntry.sourceLocation,
+            receiveTimestamp: plainEntry.receiveTimestamp,
+            spanId: plainEntry.spanId,
+            traceSampled: plainEntry.traceSampled,
+            split: plainEntry.split,
+            textPayload: plainEntry.textPayload,
+            jsonPayload: plainEntry.jsonPayload,
+            message: plainEntry.textPayload || (plainEntry.jsonPayload ? JSON.stringify(plainEntry.jsonPayload) : ''),
             functionName: functionName,
             region: region
           };
-          
-          // Debug log the final entry
-          console.log('Created log entry:', {
-            functionName: logEntry.functionName,
-            region: logEntry.region,
-            severity: logEntry.severity,
-            insertId: logEntry.insertId
-          });
-          
-          return logEntry;
         } catch (error) {
-          console.error(`Error processing log entry at index ${index}:`, error);
-          return createDefaultLogEntry();
+          console.error('Error processing log entry:', error);
+          return {
+            timestamp: new Date().toISOString(),
+            severity: 'ERROR',
+            message: 'Error processing log entry',
+            functionName: 'Unknown',
+            region: 'Unknown'
+          };
         }
       });
 
-      // Helper function to create default log entry
-      function createDefaultLogEntry() {
-        return {
-          timestamp: new Date().toISOString(),
-          severity: 'ERROR',
-          message: 'Error processing log entry',
-          functionName: 'Unknown',
-          region: 'Unknown'
-        };
-      }
+      // Get total count for pagination
+      const [totalEntries] = await logging.getEntries({
+        filter,
+        pageSize: 1
+      });
 
-      // No need for additional search filtering since it's done in the query
-      results = rawLogs;
-
-      const response = { 
+      res.json({ 
         success: true,
-        count: results.length,
-        total: results.length,
-        page: 1,
-        pageSize: results.length,
-        totalPages: 1,
-        logs: results,
+        count: rawLogs.length,
+        total: totalEntries.length,
+        page: parseInt(page),
+        pageSize: parseInt(pageSize),
+        totalPages: Math.ceil(totalEntries.length / parseInt(pageSize)),
+        logs: rawLogs,
         searchTerms: search ? [search] : []
-      };
-
-      // Log the full response details
-      console.log('Full response details:', {
-        count: response.count,
-        total: response.total,
-        page: response.page,
-        totalPages: response.totalPages,
-        resultsLength: results.length,
-        firstLogId: results[0]?.insertId || 'none',
-        allLogIds: results.map(r => r.insertId)
       });
-
-      res.json(response);
     } catch (error) {
-      console.error('Error fetching logs:', error);
-      res.status(500).json({ 
-        success: false, 
-        error: 'Failed to fetch logs: ' + error.message 
+      console.error('Error fetching logs from Cloud Logging:', error);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        status: error.status,
+        details: error.details
       });
+      throw new Error(`Failed to fetch logs: ${error.message}`);
     }
   } catch (error) {
-    console.error('Error in /api/logs:', error);
+    console.error('Error in /api/logs endpoint:', error);
     res.status(500).json({ 
-      success: false, 
-      error: 'Internal server error: ' + error.message 
+      success: false,
+      error: error.message,
+      details: error.stack
     });
   }
 });
@@ -435,151 +366,6 @@ app.get('/api/functions', async (req, res) => {
       error: error.message,
       details: error.stack,
       projectId
-    });
-  }
-});
-
-// API endpoint to get logs with improved search
-app.get('/api/logs', async (req, res) => {
-  try {
-    const { 
-      startTime, 
-      endTime, 
-      functionName,
-      severity,
-      search,
-      page = 1,
-      pageSize = 1000,
-      timestamp = Date.now()
-    } = req.query;
-
-    // Initialize variables at the top level
-    let results = [];
-    let totalEntries = [];
-
-    // Create base filter
-    const baseFilter = [
-      'resource.type="cloud_function"',
-      startTime ? `timestamp>="${startTime}"` : '',
-      endTime ? `timestamp<="${endTime}"` : '',
-      severity && severity !== 'all' ? `severity="${severity}"` : ''
-    ].filter(Boolean).join(' AND ');
-
-    // If we have a search term, add it to the filter
-    let filter = baseFilter;
-    if (search) {
-      // Escape special characters in the search term
-      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      // Search in all relevant fields with exact matching
-      filter = `${baseFilter} AND (
-        textPayload=~"${escapedSearch}" OR 
-        jsonPayload.message=~"${escapedSearch}" OR 
-        jsonPayload.error=~"${escapedSearch}" OR 
-        jsonPayload.data=~"${escapedSearch}" OR 
-        insertId=~"${escapedSearch}" OR 
-        labels.execution_id=~"${escapedSearch}" OR
-        trace=~"${escapedSearch}" OR
-        resource.labels.function_name=~"${escapedSearch}" OR
-        resource.labels.region=~"${escapedSearch}"
-      )`;
-    } else if (functionName) {
-      // Only add function name filter if we're not searching
-      filter = `${baseFilter} AND resource.labels.function_name="${functionName.split('/').pop()}" AND resource.labels.region="${functionName.split('/')[0]}"`;
-    }
-
-    console.log('Constructed filter:', filter);
-
-    try {
-      // Get logs with pagination
-      console.log('Fetching logs from Cloud Logging...');
-      const [entries] = await logging.getEntries({
-        filter,
-        orderBy: 'timestamp desc',
-        pageSize: parseInt(pageSize),
-        pageToken: parseInt(page) > 1 ? (parseInt(page) - 1).toString() : undefined
-      });
-
-      console.log(`Received ${entries.length} raw log entries from Cloud Logging`);
-      
-      // Get the raw data directly from the entries
-      const rawLogs = entries.map(entry => {
-        try {
-          // Convert to plain object and remove methods
-          const plainEntry = JSON.parse(JSON.stringify(entry));
-          
-          // Ensure resource and labels exist
-          const resource = plainEntry.resource || {};
-          const labels = resource.labels || {};
-          
-          // Extract function name and region with proper fallbacks
-          const functionName = labels.function_name || '';
-          const region = labels.region || '';
-          
-          return {
-            timestamp: plainEntry.timestamp,
-            labels: plainEntry.labels || {},
-            insertId: plainEntry.insertId,
-            httpRequest: plainEntry.httpRequest,
-            resource: resource,
-            severity: plainEntry.severity,
-            logName: plainEntry.logName,
-            operation: plainEntry.operation,
-            trace: plainEntry.trace,
-            sourceLocation: plainEntry.sourceLocation,
-            receiveTimestamp: plainEntry.receiveTimestamp,
-            spanId: plainEntry.spanId,
-            traceSampled: plainEntry.traceSampled,
-            split: plainEntry.split,
-            textPayload: plainEntry.textPayload,
-            jsonPayload: plainEntry.jsonPayload,
-            message: plainEntry.textPayload || (plainEntry.jsonPayload ? JSON.stringify(plainEntry.jsonPayload) : ''),
-            functionName: functionName,
-            region: region
-          };
-        } catch (error) {
-          console.error('Error processing log entry:', error);
-          return {
-            timestamp: new Date().toISOString(),
-            severity: 'ERROR',
-            message: 'Error processing log entry',
-            functionName: 'Unknown',
-            region: 'Unknown'
-          };
-        }
-      });
-
-      // Get total count for pagination
-      const [totalEntries] = await logging.getEntries({
-        filter,
-        pageSize: 1
-      });
-
-      res.json({ 
-        success: true,
-        count: rawLogs.length,
-        total: totalEntries.length,
-        page: parseInt(page),
-        pageSize: parseInt(pageSize),
-        totalPages: Math.ceil(totalEntries.length / parseInt(pageSize)),
-        logs: rawLogs,
-        searchTerms: search ? [search] : []
-      });
-    } catch (error) {
-      console.error('Error fetching logs from Cloud Logging:', error);
-      console.error('Error details:', {
-        message: error.message,
-        code: error.code,
-        status: error.status,
-        details: error.details
-      });
-      throw new Error(`Failed to fetch logs: ${error.message}`);
-    }
-  } catch (error) {
-    console.error('Error in /api/logs endpoint:', error);
-    res.status(500).json({ 
-      success: false,
-      error: error.message,
-      details: error.stack
     });
   }
 });

@@ -43,7 +43,9 @@ const state = {
   availableFunctions: new Set(),
   allFunctions: new Set(),
   autoRefresh: true,
-  sortDirection: 'desc'
+  sortDirection: 'desc',
+  isSearchView: false,
+  history: []
 };
 
 // DOM Elements
@@ -56,6 +58,12 @@ const logCount = document.getElementById('logCount');
 const autoRefreshToggle = document.getElementById('autoRefreshToggle');
 const autoRefreshLabel = document.querySelector('.auto-refresh-label');
 const sortDirectionBtn = document.getElementById('sortDirectionBtn');
+const loadingToast = document.getElementById('loadingToast');
+
+// Initialize Bootstrap toast
+const loadingToastInstance = new bootstrap.Toast(loadingToast, {
+  autohide: false
+});
 
 // Cache configuration
 const CACHE_CONFIG = {
@@ -175,29 +183,36 @@ function addRefreshButton() {
   functionSelect.parentNode.insertBefore(refreshButton, functionSelect.nextSibling);
 }
 
-// URL State Management
-function updateURLState() {
+// Update URL state
+function updateURLState(reloadLogs = true) {
   const params = new URLSearchParams();
   
-  // Only add parameters if they have values
-  if (state.searchTerm) params.set('search', state.searchTerm);
-  if (state.timeRange && state.timeRange !== '24h') params.set('timeRange', state.timeRange);
-  if (state.logLevel && state.logLevel !== 'all') params.set('level', state.logLevel);
-  if (state.functionName) params.set('function', state.functionName);
-  if (state.sortDirection && state.sortDirection !== 'desc') params.set('sort', state.sortDirection);
+  // Only include non-default values in URL
+  if (state.searchTerm) {
+    params.set('search', state.searchTerm);
+  }
+  if (state.timeRange !== '24h') {
+    params.set('timeRange', state.timeRange);
+  }
+  if (state.logLevel !== 'all') {
+    params.set('logLevel', state.logLevel);
+  }
+  if (state.functionName) {
+    params.set('functionName', state.functionName);
+  }
   
-  const newURL = `${window.location.pathname}${params.toString() ? '?' + params.toString() : ''}`;
+  const newUrl = `?${params.toString()}`;
   
-  // Store the complete state in history
-  window.history.pushState({
-    searchTerm: state.searchTerm || '',
-    timeRange: state.timeRange || '24h',
-    logLevel: state.logLevel || 'all',
-    functionName: state.functionName || '',
-    sortDirection: state.sortDirection || 'desc'
-  }, '', newURL);
+  // Only update URL if it's different from current URL
+  if (newUrl !== window.location.search) {
+    window.history.pushState(null, '', newUrl);
+    if (reloadLogs) {
+      loadLogs();
+    }
+  }
 }
 
+// Read state from URL
 function readURLState() {
   const params = new URLSearchParams(window.location.search);
   
@@ -206,46 +221,37 @@ function readURLState() {
   state.timeRange = '24h';
   state.logLevel = 'all';
   state.functionName = '';
-  state.sortDirection = 'desc';
+  state.sortDirection = 'desc'; // Always default to descending
   
   // Update state from URL parameters
   if (params.has('search')) {
     state.searchTerm = params.get('search');
-    if (searchInput) {
-      searchInput.value = state.searchTerm;
-    }
   }
-  
   if (params.has('timeRange')) {
     state.timeRange = params.get('timeRange');
-    if (timeRangeSelect) {
-      timeRangeSelect.value = state.timeRange;
-    }
+  }
+  if (params.has('logLevel')) {
+    state.logLevel = params.get('logLevel');
+  }
+  if (params.has('functionName')) {
+    state.functionName = params.get('functionName');
   }
   
-  if (params.has('level')) {
-    state.logLevel = params.get('level');
-    if (logLevelSelect) {
-      logLevelSelect.value = state.logLevel;
-    }
-  }
-  
-  if (params.has('function')) {
-    state.functionName = params.get('function');
-    if (functionSelect) {
-      functionSelect.value = state.functionName;
-    }
-  }
-  
-  if (params.has('sort')) {
-    state.sortDirection = params.get('sort');
-    if (sortDirectionBtn) {
-      sortDirectionBtn.innerHTML = state.sortDirection === 'desc' ? 
-        '<i class="fas fa-sort-amount-down"></i>' : 
-        '<i class="fas fa-sort-amount-up"></i>';
-    }
+  // Update UI elements
+  if (searchInput) searchInput.value = state.searchTerm;
+  if (timeRangeSelect) timeRangeSelect.value = state.timeRange;
+  if (logLevelSelect) logLevelSelect.value = state.logLevel;
+  if (functionSelect) functionSelect.value = state.functionName;
+  if (sortDirectionBtn) {
+    sortDirectionBtn.innerHTML = '<i class="fas fa-sort-amount-down"></i> Descending';
   }
 }
+
+// Handle URL changes
+window.addEventListener('popstate', (event) => {
+  readURLState();
+  loadLogs();
+});
 
 // Initialize the application
 async function init() {
@@ -262,7 +268,7 @@ async function init() {
 
   // Read initial state from URL
   readURLState();
-  
+
   // Set up event listeners
   setupEventListeners();
 
@@ -273,6 +279,9 @@ async function init() {
 // Load logs from the server
 async function loadLogs() {
   try {
+    // Show loading toast
+    loadingToastInstance.show();
+    
     const startTime = getStartTime();
     const endTime = getEndTime();
     
@@ -282,8 +291,7 @@ async function loadLogs() {
       endTime,
       severity: state.logLevel,
       page: 1,
-      pageSize: 1000,
-      timestamp: Date.now()
+      pageSize: 1000
     });
 
     // Add search term if it exists
@@ -311,21 +319,38 @@ async function loadLogs() {
 
     // Update state with new logs
     state.logs = data.logs;
-    state.filteredLogs = data.logs; // No client-side filtering needed anymore
+    state.filteredLogs = data.logs;
+    
+    // Sort the logs after loading
+    sortLogs();
+    
+    // Update available functions from logs
+    data.logs.forEach(log => {
+      if (log.functionName && log.region) {
+        const functionInfo = {
+          name: log.functionName,
+          region: log.region,
+          fullPath: `${log.region}/${log.functionName}`
+        };
+        state.allFunctions.add(JSON.stringify(functionInfo));
+      }
+    });
+    
+    // Update function dropdown
+    updateFunctionDropdown();
     
     // Update log count
     updateLogCount();
     
-    // Render logs
-    renderLogs();
-    
-    // Update URL state
-    updateURLState();
+    // Hide loading toast
+    loadingToastInstance.hide();
     
     return data;
   } catch (error) {
     console.error('Error loading logs:', error);
     showError(error.message);
+    // Hide loading toast on error
+    loadingToastInstance.hide();
     throw error;
   }
 }
@@ -535,27 +560,18 @@ function setupEventListeners() {
   // Search input
   if (searchInput) {
     searchInput.addEventListener('input', debounce(() => {
-      state.searchTerm = searchInput.value;
+      const newSearchTerm = searchInput.value.trim();
+      state.searchTerm = newSearchTerm;
+      state.isSearchView = !!newSearchTerm;
       updateURLState();
-      loadLogs();
     }, 300));
   }
-
-  // Add URL state management
-  window.addEventListener('popstate', (event) => {
-    // Read the state from the URL
-    readURLState();
-    
-    // Load logs with the updated state
-    loadLogs();
-  });
 
   // Log level select
   if (logLevelSelect) {
     logLevelSelect.addEventListener('change', () => {
       state.logLevel = logLevelSelect.value;
       updateURLState();
-      loadLogs();
     });
   }
 
@@ -564,7 +580,6 @@ function setupEventListeners() {
     functionSelect.addEventListener('change', () => {
       state.functionName = functionSelect.value;
       updateURLState();
-      loadLogs();
     });
   }
 
@@ -588,19 +603,24 @@ function setupEventListeners() {
     timeRangeSelect.addEventListener('change', () => {
       state.timeRange = timeRangeSelect.value;
       updateURLState();
-      loadLogs();
     });
   }
 
-  // Add sort direction button event listener
+  // Sort direction button
   if (sortDirectionBtn) {
     sortDirectionBtn.addEventListener('click', () => {
+      // Toggle sort direction
       state.sortDirection = state.sortDirection === 'desc' ? 'asc' : 'desc';
-      sortDirectionBtn.innerHTML = state.sortDirection === 'desc' ? 
-        '<i class="fas fa-sort-amount-down"></i>' : 
-        '<i class="fas fa-sort-amount-up"></i>';
-      updateURLState();
-      loadLogs();
+      
+      // Update button icon and text
+      if (state.sortDirection === 'desc') {
+        sortDirectionBtn.innerHTML = '<i class="fas fa-sort-amount-down"></i> Descending';
+      } else {
+        sortDirectionBtn.innerHTML = '<i class="fas fa-sort-amount-up"></i> Ascending';
+      }
+      
+      // Sort logs client-side
+      sortLogs();
     });
   }
 }
@@ -839,6 +859,7 @@ function createLogEntry(log) {
         if (searchInput) {
           searchInput.value = executionId;
           state.searchTerm = executionId;
+          state.isSearchView = true;
           updateURLState();
           loadLogs();
         }
@@ -847,4 +868,52 @@ function createLogEntry(log) {
   }
 
   return logEntry;
+}
+
+// Function to sort logs
+function sortLogs() {
+  if (!state.logs || state.logs.length === 0) return;
+  
+  console.log('Sorting logs in', state.sortDirection, 'order');
+  
+  // Create a copy of the logs array to avoid mutating the original
+  const sortedLogs = [...state.logs];
+  
+  // Sort based on timestamp
+  sortedLogs.sort((a, b) => {
+    // Handle different timestamp formats
+    let dateA, dateB;
+    
+    if (typeof a.timestamp === 'object' && a.timestamp.seconds) {
+      // Handle Google Cloud timestamp format
+      dateA = new Date(a.timestamp.seconds * 1000 + (a.timestamp.nanos || 0) / 1000000);
+    } else {
+      dateA = new Date(a.timestamp);
+    }
+    
+    if (typeof b.timestamp === 'object' && b.timestamp.seconds) {
+      // Handle Google Cloud timestamp format
+      dateB = new Date(b.timestamp.seconds * 1000 + (b.timestamp.nanos || 0) / 1000000);
+    } else {
+      dateB = new Date(b.timestamp);
+    }
+    
+    // Compare timestamps
+    if (state.sortDirection === 'desc') {
+      return dateB - dateA; // Newest first
+    } else {
+      return dateA - dateB; // Oldest first
+    }
+  });
+  
+  console.log('First log timestamp:', sortedLogs[0]?.timestamp);
+  console.log('Last log timestamp:', sortedLogs[sortedLogs.length - 1]?.timestamp);
+  
+  // Update state with sorted logs
+  state.logs = sortedLogs;
+  state.filteredLogs = sortedLogs;
+  
+  // Clear and re-render the logs
+  logContainer.innerHTML = '';
+  renderLogs();
 }
