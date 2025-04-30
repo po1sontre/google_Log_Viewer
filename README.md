@@ -59,7 +59,7 @@ npm install
 4. Start the server:
 ```bash
 npm start
-```
+``` 
 
 ## Project Structure
 
@@ -132,3 +132,4 @@ log-viewer/
 3. Commit your changes
 4. Push to the branch
 5. Create a Pull Request
+--
