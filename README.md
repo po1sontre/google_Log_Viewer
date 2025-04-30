@@ -39,7 +39,7 @@ GOOGLE_APPLICATION_CREDENTIALS=./service-account-key.json
 
 1. Clone the repository:
 ```bash
-git clone [<repository-url>](https://github.com/po1sontre/google_Log_Viewer.git)
+git clone https://github.com/po1sontre/google_Log_Viewer.git
 cd log-viewer
 ```
 
