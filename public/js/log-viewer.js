@@ -42,7 +42,8 @@ const state = {
   functionName: '',
   availableFunctions: new Set(),
   allFunctions: new Set(),
-  autoRefresh: true
+  autoRefresh: true,
+  sortDirection: 'desc'
 };
 
 // DOM Elements
@@ -54,6 +55,7 @@ const functionSelect = document.getElementById('functionSelect');
 const logCount = document.getElementById('logCount');
 const autoRefreshToggle = document.getElementById('autoRefreshToggle');
 const autoRefreshLabel = document.querySelector('.auto-refresh-label');
+const sortDirectionBtn = document.getElementById('sortDirectionBtn');
 
 // Cache configuration
 const CACHE_CONFIG = {
@@ -173,6 +175,78 @@ function addRefreshButton() {
   functionSelect.parentNode.insertBefore(refreshButton, functionSelect.nextSibling);
 }
 
+// URL State Management
+function updateURLState() {
+  const params = new URLSearchParams();
+  
+  // Only add parameters if they have values
+  if (state.searchTerm) params.set('search', state.searchTerm);
+  if (state.timeRange && state.timeRange !== '24h') params.set('timeRange', state.timeRange);
+  if (state.logLevel && state.logLevel !== 'all') params.set('level', state.logLevel);
+  if (state.functionName) params.set('function', state.functionName);
+  if (state.sortDirection && state.sortDirection !== 'desc') params.set('sort', state.sortDirection);
+  
+  const newURL = `${window.location.pathname}${params.toString() ? '?' + params.toString() : ''}`;
+  
+  // Store the complete state in history
+  window.history.pushState({
+    searchTerm: state.searchTerm || '',
+    timeRange: state.timeRange || '24h',
+    logLevel: state.logLevel || 'all',
+    functionName: state.functionName || '',
+    sortDirection: state.sortDirection || 'desc'
+  }, '', newURL);
+}
+
+function readURLState() {
+  const params = new URLSearchParams(window.location.search);
+  
+  // Reset state to defaults
+  state.searchTerm = '';
+  state.timeRange = '24h';
+  state.logLevel = 'all';
+  state.functionName = '';
+  state.sortDirection = 'desc';
+  
+  // Update state from URL parameters
+  if (params.has('search')) {
+    state.searchTerm = params.get('search');
+    if (searchInput) {
+      searchInput.value = state.searchTerm;
+    }
+  }
+  
+  if (params.has('timeRange')) {
+    state.timeRange = params.get('timeRange');
+    if (timeRangeSelect) {
+      timeRangeSelect.value = state.timeRange;
+    }
+  }
+  
+  if (params.has('level')) {
+    state.logLevel = params.get('level');
+    if (logLevelSelect) {
+      logLevelSelect.value = state.logLevel;
+    }
+  }
+  
+  if (params.has('function')) {
+    state.functionName = params.get('function');
+    if (functionSelect) {
+      functionSelect.value = state.functionName;
+    }
+  }
+  
+  if (params.has('sort')) {
+    state.sortDirection = params.get('sort');
+    if (sortDirectionBtn) {
+      sortDirectionBtn.innerHTML = state.sortDirection === 'desc' ? 
+        '<i class="fas fa-sort-amount-down"></i>' : 
+        '<i class="fas fa-sort-amount-up"></i>';
+    }
+  }
+}
+
 // Initialize the application
 async function init() {
   // Load theme preference
@@ -186,73 +260,73 @@ async function init() {
   // Add refresh button
   addRefreshButton();
 
-  // Load initial logs
-  await loadLogs();
-
+  // Read initial state from URL
+  readURLState();
+  
   // Set up event listeners
   setupEventListeners();
+
+  // Load initial logs with the current state
+  await loadLogs();
 }
 
 // Load logs from the server
 async function loadLogs() {
   try {
-    console.log('Loading logs...');
-    console.log('Time range:', document.getElementById('timeRange').value);
-    
-    // Show loading state
-    logContainer.innerHTML = `
-      <div class="alert alert-info">
-        <i class="fas fa-spinner fa-spin me-2"></i>
-        Loading logs...
-      </div>
-    `;
-    
     const startTime = getStartTime();
-    const endTime = new Date().toISOString();
-    console.log('Start time:', startTime);
-    console.log('End time:', endTime);
+    const endTime = getEndTime();
     
+    // Construct the URL with all parameters
     const params = new URLSearchParams({
       startTime,
       endTime,
-      functionName: state.functionName,
-      severity: state.logLevel === 'all' ? '' : state.logLevel,
-      search: state.searchTerm
+      severity: state.logLevel,
+      page: 1,
+      pageSize: 1000,
+      timestamp: Date.now()
     });
 
-    console.log('Fetching logs with params:', Object.fromEntries(params));
-    const response = await fetch(`/api/logs?${params}`);
-    const data = await response.json();
-    
-    if (data.error) {
-      throw new Error(data.error);
+    // Add search term if it exists
+    if (state.searchTerm) {
+      params.set('search', state.searchTerm.trim());
+    }
+
+    // Add function name if it exists
+    if (state.functionName) {
+      params.set('functionName', state.functionName);
+    }
+
+    const url = `/api/logs?${params.toString()}`;
+    console.log('Fetching logs with URL:', url);
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
     
-    console.log('Received logs:', data.logs?.length || 0);
-    state.logs = data.logs || [];
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch logs');
+    }
+
+    // Update state with new logs
+    state.logs = data.logs;
+    state.filteredLogs = data.logs; // No client-side filtering needed anymore
     
-    // Extract unique functions from logs and add to allFunctions
-    state.logs.forEach(log => {
-      if (log.functionName && log.region) {
-        const func = {
-          name: log.functionName,
-          region: log.region,
-          fullPath: `${log.region}/${log.functionName}`
-        };
-        state.allFunctions.add(JSON.stringify(func));
-      }
-    });
-    
-    // Update function dropdown with all discovered functions
-    updateFunctionDropdown();
-    
-    applyFilters();
-    
-    renderLogs();
+    // Update log count
     updateLogCount();
+    
+    // Render logs
+    renderLogs();
+    
+    // Update URL state
+    updateURLState();
+    
+    return data;
   } catch (error) {
     console.error('Error loading logs:', error);
-    showError('Failed to load logs: ' + error.message);
+    showError(error.message);
+    throw error;
   }
 }
 
@@ -353,46 +427,6 @@ function updateLogCount() {
   if (logCount) {
     logCount.textContent = message;
   }
-}
-
-// Apply filters to logs
-function applyFilters() {
-  console.log('Applying filters:', {
-    functionName: state.functionName,
-    logLevel: state.logLevel,
-    searchTerm: state.searchTerm
-  });
-
-  if (!state.logs) {
-    state.filteredLogs = [];
-    return;
-  }
-
-  state.filteredLogs = state.logs.filter(log => {
-    // Function name filter
-    if (state.functionName && state.functionName !== 'all') {
-      if (!log.functionName || !log.region) return false;
-      const logFullPath = `${log.region}/${log.functionName}`;
-      if (logFullPath !== state.functionName) return false;
-    }
-
-    // Log level filter
-    if (state.logLevel && state.logLevel !== 'all') {
-      if (log.severity !== state.logLevel) return false;
-    }
-
-    // Search term filter
-    if (state.searchTerm) {
-      const searchLower = state.searchTerm.toLowerCase();
-      const textContent = JSON.stringify(log).toLowerCase();
-      if (!textContent.includes(searchLower)) return false;
-    }
-
-    return true;
-  });
-
-  console.log('Filtered logs:', state.filteredLogs.length);
-  updateLogCount(); // Update count after applying filters
 }
 
 // Format message content
@@ -502,17 +536,26 @@ function setupEventListeners() {
   if (searchInput) {
     searchInput.addEventListener('input', debounce(() => {
       state.searchTerm = searchInput.value;
-      applyFilters();
-      renderLogs();
+      updateURLState();
+      loadLogs();
     }, 300));
   }
+
+  // Add URL state management
+  window.addEventListener('popstate', (event) => {
+    // Read the state from the URL
+    readURLState();
+    
+    // Load logs with the updated state
+    loadLogs();
+  });
 
   // Log level select
   if (logLevelSelect) {
     logLevelSelect.addEventListener('change', () => {
       state.logLevel = logLevelSelect.value;
-      applyFilters();
-      renderLogs();
+      updateURLState();
+      loadLogs();
     });
   }
 
@@ -520,7 +563,8 @@ function setupEventListeners() {
   if (functionSelect) {
     functionSelect.addEventListener('change', () => {
       state.functionName = functionSelect.value;
-      loadLogs(); // Reload logs when function changes
+      updateURLState();
+      loadLogs();
     });
   }
 
@@ -543,6 +587,19 @@ function setupEventListeners() {
   if (timeRangeSelect) {
     timeRangeSelect.addEventListener('change', () => {
       state.timeRange = timeRangeSelect.value;
+      updateURLState();
+      loadLogs();
+    });
+  }
+
+  // Add sort direction button event listener
+  if (sortDirectionBtn) {
+    sortDirectionBtn.addEventListener('click', () => {
+      state.sortDirection = state.sortDirection === 'desc' ? 'asc' : 'desc';
+      sortDirectionBtn.innerHTML = state.sortDirection === 'desc' ? 
+        '<i class="fas fa-sort-amount-down"></i>' : 
+        '<i class="fas fa-sort-amount-up"></i>';
+      updateURLState();
       loadLogs();
     });
   }
@@ -777,13 +834,13 @@ function createLogEntry(log) {
       e.preventDefault();
       const executionId = executionIdLink.getAttribute('data-execution-id');
       if (executionId) {
-        // Update search input and trigger search
+        // Update search input and trigger server-side search
         const searchInput = document.getElementById('searchInput');
         if (searchInput) {
           searchInput.value = executionId;
           state.searchTerm = executionId;
-          applyFilters();
-          renderLogs();
+          updateURLState();
+          loadLogs();
         }
       }
     });

@@ -153,26 +153,29 @@ app.get('/api/logs', async (req, res) => {
       severity && severity !== 'all' ? `severity="${severity}"` : ''
     ].filter(Boolean).join(' AND ');
 
-    // If we have a search term, we'll search across all functions
-    // Otherwise, filter by specific function if provided
-    const filter = [
-      baseFilter,
-      functionName ? `resource.labels.function_name="${functionName.split('/').pop()}" AND resource.labels.region="${functionName.split('/')[0]}"` : ''
-    ].filter(Boolean).join(' AND ');
+    // If we have a search term, add it to the filter
+    let filter = baseFilter;
+    if (search) {
+      // Escape special characters in the search term
+      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // Search in all relevant fields with exact matching
+      filter = `${baseFilter} AND (
+        textPayload=~"${escapedSearch}" OR 
+        jsonPayload.message=~"${escapedSearch}" OR 
+        jsonPayload.error=~"${escapedSearch}" OR 
+        jsonPayload.data=~"${escapedSearch}" OR 
+        insertId=~"${escapedSearch}" OR 
+        labels.execution_id=~"${escapedSearch}" OR
+        trace=~"${escapedSearch}" OR
+        resource.labels.function_name=~"${escapedSearch}" OR
+        resource.labels.region=~"${escapedSearch}"
+      )`;
+    } else if (functionName) {
+      // Only add function name filter if we're not searching
+      filter = `${baseFilter} AND resource.labels.function_name="${functionName.split('/').pop()}" AND resource.labels.region="${functionName.split('/')[0]}"`;
+    }
 
     console.log('Constructed filter:', filter);
-
-    // For search queries, always fetch fresh data
-    const cacheKey = `logs_${startTime}_${endTime}_${functionName}_${severity}_${search}_${timestamp}`;
-    const skipCache = search ? true : false;
-    
-    if (!skipCache) {
-      const cachedResults = cache.get(cacheKey);
-      if (cachedResults) {
-        console.log('Cache hit for logs query');
-        return res.json(cachedResults);
-      }
-    }
 
     try {
       // Get logs without pagination
@@ -299,92 +302,18 @@ app.get('/api/logs', async (req, res) => {
         };
       }
 
-      // Apply search filter if provided
+      // No need for additional search filtering since it's done in the query
       results = rawLogs;
-      if (search) {
-        searchTerms = search.toLowerCase().split(' ').filter(term => term.length > 0);
-        console.log(`Searching with terms: ${searchTerms.join(', ')}`);
-        
-        results = rawLogs.filter(entry => {
-          // Create an array of all searchable fields
-          const searchableFields = {
-            insertId: entry.insertId || '',
-            message: entry.message || '',
-            functionName: entry.functionName || '',
-            region: entry.region || '',
-            severity: entry.severity || '',
-            textPayload: entry.textPayload || '',
-            jsonPayload: entry.jsonPayload ? JSON.stringify(entry.jsonPayload) : ''
-          };
-          
-          // Debug log the current entry
-          console.log('\nChecking entry:', entry.insertId);
-          
-          // Check each search term against all fields
-          const matches = searchTerms.every(term => {
-            let termFound = false;
-            
-            // Check each field for the term
-            for (const [field, value] of Object.entries(searchableFields)) {
-              const fieldValue = value.toLowerCase();
-              if (fieldValue.includes(term)) {
-                console.log(`✓ Found "${term}" in ${field}: ${value}`);
-                termFound = true;
-                break;
-              }
-            }
-            
-            if (!termFound) {
-              console.log(`✗ Term "${term}" not found in any field`);
-            }
-            
-            return termFound;
-          });
-          
-          if (matches) {
-            console.log(`✓ Entry ${entry.insertId} matches all search terms`);
-          } else {
-            console.log(`✗ Entry ${entry.insertId} does not match all terms`);
-          }
-          
-          return matches;
-        });
-        
-        // Debug log the results
-        console.log(`\nSearch Results:`);
-        console.log(`Found ${results.length} matching entries`);
-        if (results.length > 0) {
-          console.log('Matching entries:', results.map(r => r.insertId).join(', '));
-        }
-      }
-
-      // Get total count for pagination
-      const totalCount = search ? results.length : totalEntries.length;
-      
-      // Calculate pagination
-      const startIndex = 0;
-      const endIndex = results.length;
-      
-      // Ensure we're not trying to paginate beyond our results
-      const paginatedResults = results.slice(startIndex, Math.min(endIndex, results.length));
-      
-      // Log pagination details
-      console.log('Pagination details:', {
-        startIndex,
-        endIndex,
-        totalResults: results.length,
-        paginatedLength: paginatedResults.length
-      });
 
       const response = { 
         success: true,
-        count: results.length, // Use total matching results count
-        total: totalCount,
+        count: results.length,
+        total: results.length,
         page: 1,
         pageSize: results.length,
         totalPages: 1,
-        logs: paginatedResults,
-        searchTerms: search ? searchTerms : []
+        logs: results,
+        searchTerms: search ? [search] : []
       };
 
       // Log the full response details
@@ -393,33 +322,24 @@ app.get('/api/logs', async (req, res) => {
         total: response.total,
         page: response.page,
         totalPages: response.totalPages,
-        resultsLength: paginatedResults.length,
-        firstLogId: paginatedResults[0]?.insertId || 'none',
-        allLogIds: paginatedResults.map(r => r.insertId)
+        resultsLength: results.length,
+        firstLogId: results[0]?.insertId || 'none',
+        allLogIds: results.map(r => r.insertId)
       });
-      
-      // Cache results if not a search query
-      if (!skipCache) {
-        cache.set(cacheKey, response);
-      }
-      
+
       res.json(response);
     } catch (error) {
-      console.error('Error fetching logs from Cloud Logging:', error);
-      console.error('Error details:', {
-        message: error.message,
-        code: error.code,
-        status: error.status,
-        details: error.details
+      console.error('Error fetching logs:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: 'Failed to fetch logs: ' + error.message 
       });
-      throw new Error(`Failed to fetch logs: ${error.message}`);
     }
   } catch (error) {
-    console.error('Error in /api/logs endpoint:', error);
+    console.error('Error in /api/logs:', error);
     res.status(500).json({ 
-      success: false,
-      error: error.message,
-      details: error.stack
+      success: false, 
+      error: 'Internal server error: ' + error.message 
     });
   }
 });
@@ -535,19 +455,7 @@ app.get('/api/logs', async (req, res) => {
 
     // Initialize variables at the top level
     let results = [];
-    let searchTerms = [];
     let totalEntries = [];
-
-    // Validate pagination parameters
-    const parsedPage = parseInt(page);
-    const parsedPageSize = parseInt(pageSize);
-    
-    if (isNaN(parsedPage) || parsedPage < 1) {
-      throw new Error('Invalid page number');
-    }
-    if (isNaN(parsedPageSize) || parsedPageSize < 1 || parsedPageSize > 200) {
-      throw new Error('Invalid page size. Must be between 1 and 200');
-    }
 
     // Create base filter
     const baseFilter = [
@@ -557,343 +465,114 @@ app.get('/api/logs', async (req, res) => {
       severity && severity !== 'all' ? `severity="${severity}"` : ''
     ].filter(Boolean).join(' AND ');
 
-    // If we have a search term, we'll search across all functions
-    // Otherwise, filter by specific function if provided
-    const filter = [
-      baseFilter,
-      functionName ? `resource.labels.function_name="${functionName.split('/').pop()}" AND resource.labels.region="${functionName.split('/')[0]}"` : ''
-    ].filter(Boolean).join(' AND ');
+    // If we have a search term, add it to the filter
+    let filter = baseFilter;
+    if (search) {
+      // Escape special characters in the search term
+      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // Search in all relevant fields with exact matching
+      filter = `${baseFilter} AND (
+        textPayload=~"${escapedSearch}" OR 
+        jsonPayload.message=~"${escapedSearch}" OR 
+        jsonPayload.error=~"${escapedSearch}" OR 
+        jsonPayload.data=~"${escapedSearch}" OR 
+        insertId=~"${escapedSearch}" OR 
+        labels.execution_id=~"${escapedSearch}" OR
+        trace=~"${escapedSearch}" OR
+        resource.labels.function_name=~"${escapedSearch}" OR
+        resource.labels.region=~"${escapedSearch}"
+      )`;
+    } else if (functionName) {
+      // Only add function name filter if we're not searching
+      filter = `${baseFilter} AND resource.labels.function_name="${functionName.split('/').pop()}" AND resource.labels.region="${functionName.split('/')[0]}"`;
+    }
 
     console.log('Constructed filter:', filter);
 
-    // Create a cache key that includes the timestamp
-    const cacheKey = `logs_${startTime}_${endTime}_${functionName}_${severity}_${search}_${page}_${pageSize}_${timestamp}`;
-    
-    // For search queries, always fetch fresh data
-    if (search) {
-      console.log('Search query detected, bypassing cache');
-      try {
-        // Get logs with pagination
-        console.log('Fetching logs from Cloud Logging...');
-        const [entries] = await logging.getEntries({
-          filter,
-          orderBy: 'timestamp desc',
-          pageSize: parsedPageSize,
-          pageToken: parsedPage > 1 ? (parsedPage - 1).toString() : undefined
-        });
-
-        console.log(`Received ${entries.length} raw log entries from Cloud Logging`);
-        
-        // Get the raw data directly from the entries
-        const rawLogs = entries.map(entry => {
-          try {
-            // Convert to plain object and remove methods
-            const plainEntry = JSON.parse(JSON.stringify(entry));
-            
-            // Ensure resource and labels exist
-            const resource = plainEntry.resource || {};
-            const labels = resource.labels || {};
-            
-            // Extract function name and region with proper fallbacks
-            const functionName = labels.function_name || '';
-            const region = labels.region || '';
-            
-            return {
-              timestamp: plainEntry.timestamp,
-              labels: plainEntry.labels || {},
-              insertId: plainEntry.insertId,
-              httpRequest: plainEntry.httpRequest,
-              resource: resource,
-              severity: plainEntry.severity,
-              logName: plainEntry.logName,
-              operation: plainEntry.operation,
-              trace: plainEntry.trace,
-              sourceLocation: plainEntry.sourceLocation,
-              receiveTimestamp: plainEntry.receiveTimestamp,
-              spanId: plainEntry.spanId,
-              traceSampled: plainEntry.traceSampled,
-              split: plainEntry.split,
-              textPayload: plainEntry.textPayload,
-              jsonPayload: plainEntry.jsonPayload,
-              message: plainEntry.textPayload || (plainEntry.jsonPayload ? JSON.stringify(plainEntry.jsonPayload) : ''),
-              functionName: functionName,
-              region: region
-            };
-          } catch (error) {
-            console.error('Error processing log entry:', error);
-            return {
-              timestamp: new Date().toISOString(),
-              severity: 'ERROR',
-              message: 'Error processing log entry',
-              functionName: 'Unknown',
-              region: 'Unknown'
-            };
-          }
-        });
-
-        // Apply search filter if provided
-        results = rawLogs;
-        if (search) {
-          searchTerms = search.toLowerCase().split(' ').filter(term => term.length > 0);
-          console.log(`Searching with terms: ${searchTerms.join(', ')}`);
-          
-          results = rawLogs.filter(entry => {
-            // Create searchable text from all relevant fields
-            const searchableText = [
-              entry.message,
-              entry.functionName,
-              entry.region,
-              entry.severity,
-              entry.textPayload,
-              entry.insertId,
-              entry.jsonPayload ? JSON.stringify(entry.jsonPayload) : ''
-            ].filter(Boolean).join(' ').toLowerCase();
-            
-            // Debug log the search
-            console.log('Entry insertId:', entry.insertId);
-            console.log('Searching in:', searchableText);
-            console.log('Looking for terms:', searchTerms);
-            
-            // Check if all search terms are found in the searchable text
-            const found = searchTerms.every(term => {
-              const isFound = searchableText.indexOf(term) !== -1;
-              console.log(`Term "${term}" found: ${isFound}`);
-              return isFound;
-            });
-            
-            if (found) {
-              console.log('Found match in entry:', entry.insertId);
-            }
-            
-            return found;
-          });
-          
-          // Debug log the results
-          console.log(`Found ${results.length} matching entries`);
-          if (results.length > 0) {
-            console.log('First matching entry:', results[0].insertId);
-          }
-        }
-
-        // Get total count for pagination
-        const [totalEntries] = await logging.getEntries({
-          filter,
-          pageSize: 1
-        });
-
-        res.json({ 
-          success: true,
-          count: results.length,
-          total: totalEntries.length,
-          page: parsedPage,
-          pageSize: parsedPageSize,
-          totalPages: Math.ceil(totalEntries.length / parsedPageSize),
-          logs: results
-        });
-      } catch (error) {
-        console.error('Error fetching logs from Cloud Logging:', error);
-        console.error('Error details:', {
-          message: error.message,
-          code: error.code,
-          status: error.status,
-          details: error.details
-        });
-        throw new Error(`Failed to fetch logs: ${error.message}`);
-      }
-    } else {
-      // For non-search queries, use cache
-      const cachedResults = cache.get(cacheKey);
-      if (cachedResults) {
-        console.log('Cache hit for logs query');
-        return res.json(cachedResults);
-      }
-
-      // Validate pagination parameters
-      const parsedPage = parseInt(page);
-      const parsedPageSize = parseInt(pageSize);
-      
-      if (isNaN(parsedPage) || parsedPage < 1) {
-        throw new Error('Invalid page number');
-      }
-      if (isNaN(parsedPageSize) || parsedPageSize < 1 || parsedPageSize > 200) {
-        throw new Error('Invalid page size. Must be between 1 and 200');
-      }
-
-      console.log('Received request with parameters:', { 
-        startTime, 
-        endTime, 
-        functionName,
-        severity,
-        search,
-        page: parsedPage,
-        pageSize: parsedPageSize
+    try {
+      // Get logs with pagination
+      console.log('Fetching logs from Cloud Logging...');
+      const [entries] = await logging.getEntries({
+        filter,
+        orderBy: 'timestamp desc',
+        pageSize: parseInt(pageSize),
+        pageToken: parseInt(page) > 1 ? (parseInt(page) - 1).toString() : undefined
       });
 
-      // Validate time range
-      if (startTime && endTime) {
-        const start = new Date(startTime);
-        const end = new Date(endTime);
-        const now = new Date();
-
-        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-          throw new Error('Invalid date format');
-        }
-        if (start > end) {
-          throw new Error('Start time must be before end time');
-        }
-        if (start > now) {
-          console.warn('Warning: Start time is in the future');
-        }
-        if (end > now) {
-          console.warn('Warning: End time is in the future');
-        }
-      }
-
-      // Create base filter
-      const baseFilter = [
-        'resource.type="cloud_function"',
-        startTime ? `timestamp>="${startTime}"` : '',
-        endTime ? `timestamp<="${endTime}"` : '',
-        severity && severity !== 'all' ? `severity="${severity}"` : ''
-      ].filter(Boolean).join(' AND ');
-
-      // If we have a search term, we'll search across all functions
-      // Otherwise, filter by specific function if provided
-      const filter = [
-        baseFilter,
-        functionName ? `resource.labels.function_name="${functionName.split('/').pop()}" AND resource.labels.region="${functionName.split('/')[0]}"` : ''
-      ].filter(Boolean).join(' AND ');
-
-      console.log('Constructed filter:', filter);
-
-      try {
-        // Get logs with pagination
-        console.log('Fetching logs from Cloud Logging...');
-        const [entries] = await logging.getEntries({
-          filter,
-          orderBy: 'timestamp desc',
-          pageSize: parsedPageSize,
-          pageToken: parsedPage > 1 ? (parsedPage - 1).toString() : undefined
-        });
-
-        console.log(`Received ${entries.length} raw log entries from Cloud Logging`);
-        
-        // Get the raw data directly from the entries
-        const rawLogs = entries.map(entry => {
-          try {
-            // Convert to plain object and remove methods
-            const plainEntry = JSON.parse(JSON.stringify(entry));
-            
-            // Ensure resource and labels exist
-            const resource = plainEntry.resource || {};
-            const labels = resource.labels || {};
-            
-            // Extract function name and region with proper fallbacks
-            const functionName = labels.function_name || '';
-            const region = labels.region || '';
-            
-            return {
-              timestamp: plainEntry.timestamp,
-              labels: plainEntry.labels || {},
-              insertId: plainEntry.insertId,
-              httpRequest: plainEntry.httpRequest,
-              resource: resource,
-              severity: plainEntry.severity,
-              logName: plainEntry.logName,
-              operation: plainEntry.operation,
-              trace: plainEntry.trace,
-              sourceLocation: plainEntry.sourceLocation,
-              receiveTimestamp: plainEntry.receiveTimestamp,
-              spanId: plainEntry.spanId,
-              traceSampled: plainEntry.traceSampled,
-              split: plainEntry.split,
-              textPayload: plainEntry.textPayload,
-              jsonPayload: plainEntry.jsonPayload,
-              message: plainEntry.textPayload || (plainEntry.jsonPayload ? JSON.stringify(plainEntry.jsonPayload) : ''),
-              functionName: functionName,
-              region: region
-            };
-          } catch (error) {
-            console.error('Error processing log entry:', error);
-            return {
-              timestamp: new Date().toISOString(),
-              severity: 'ERROR',
-              message: 'Error processing log entry',
-              functionName: 'Unknown',
-              region: 'Unknown'
-            };
-          }
-        });
-
-        // Apply search filter if provided
-        results = rawLogs;
-        if (search) {
-          searchTerms = search.toLowerCase().split(' ').filter(term => term.length > 0);
-          console.log(`Searching with terms: ${searchTerms.join(', ')}`);
+      console.log(`Received ${entries.length} raw log entries from Cloud Logging`);
+      
+      // Get the raw data directly from the entries
+      const rawLogs = entries.map(entry => {
+        try {
+          // Convert to plain object and remove methods
+          const plainEntry = JSON.parse(JSON.stringify(entry));
           
-          results = rawLogs.filter(entry => {
-            // Create searchable text from all relevant fields
-            const searchableText = [
-              entry.message,
-              entry.functionName,
-              entry.region,
-              entry.severity,
-              entry.textPayload,
-              entry.insertId,
-              entry.jsonPayload ? JSON.stringify(entry.jsonPayload) : ''
-            ].filter(Boolean).join(' ').toLowerCase();
-            
-            // Debug log the search
-            console.log('Entry insertId:', entry.insertId);
-            console.log('Searching in:', searchableText);
-            console.log('Looking for terms:', searchTerms);
-            
-            // Check if all search terms are found in the searchable text
-            const found = searchTerms.every(term => {
-              const isFound = searchableText.indexOf(term) !== -1;
-              console.log(`Term "${term}" found: ${isFound}`);
-              return isFound;
-            });
-            
-            if (found) {
-              console.log('Found match in entry:', entry.insertId);
-            }
-            
-            return found;
-          });
+          // Ensure resource and labels exist
+          const resource = plainEntry.resource || {};
+          const labels = resource.labels || {};
           
-          // Debug log the results
-          console.log(`Found ${results.length} matching entries`);
-          if (results.length > 0) {
-            console.log('First matching entry:', results[0].insertId);
-          }
+          // Extract function name and region with proper fallbacks
+          const functionName = labels.function_name || '';
+          const region = labels.region || '';
+          
+          return {
+            timestamp: plainEntry.timestamp,
+            labels: plainEntry.labels || {},
+            insertId: plainEntry.insertId,
+            httpRequest: plainEntry.httpRequest,
+            resource: resource,
+            severity: plainEntry.severity,
+            logName: plainEntry.logName,
+            operation: plainEntry.operation,
+            trace: plainEntry.trace,
+            sourceLocation: plainEntry.sourceLocation,
+            receiveTimestamp: plainEntry.receiveTimestamp,
+            spanId: plainEntry.spanId,
+            traceSampled: plainEntry.traceSampled,
+            split: plainEntry.split,
+            textPayload: plainEntry.textPayload,
+            jsonPayload: plainEntry.jsonPayload,
+            message: plainEntry.textPayload || (plainEntry.jsonPayload ? JSON.stringify(plainEntry.jsonPayload) : ''),
+            functionName: functionName,
+            region: region
+          };
+        } catch (error) {
+          console.error('Error processing log entry:', error);
+          return {
+            timestamp: new Date().toISOString(),
+            severity: 'ERROR',
+            message: 'Error processing log entry',
+            functionName: 'Unknown',
+            region: 'Unknown'
+          };
         }
+      });
 
-        // Get total count for pagination
-        const [totalEntries] = await logging.getEntries({
-          filter,
-          pageSize: 1
-        });
+      // Get total count for pagination
+      const [totalEntries] = await logging.getEntries({
+        filter,
+        pageSize: 1
+      });
 
-        res.json({ 
-          success: true,
-          count: results.length,
-          total: totalEntries.length,
-          page: parsedPage,
-          pageSize: parsedPageSize,
-          totalPages: Math.ceil(totalEntries.length / parsedPageSize),
-          logs: results
-        });
-      } catch (error) {
-        console.error('Error fetching logs from Cloud Logging:', error);
-        console.error('Error details:', {
-          message: error.message,
-          code: error.code,
-          status: error.status,
-          details: error.details
-        });
-        throw new Error(`Failed to fetch logs: ${error.message}`);
-      }
+      res.json({ 
+        success: true,
+        count: rawLogs.length,
+        total: totalEntries.length,
+        page: parseInt(page),
+        pageSize: parseInt(pageSize),
+        totalPages: Math.ceil(totalEntries.length / parseInt(pageSize)),
+        logs: rawLogs,
+        searchTerms: search ? [search] : []
+      });
+    } catch (error) {
+      console.error('Error fetching logs from Cloud Logging:', error);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        status: error.status,
+        details: error.details
+      });
+      throw new Error(`Failed to fetch logs: ${error.message}`);
     }
   } catch (error) {
     console.error('Error in /api/logs endpoint:', error);
