@@ -607,8 +607,20 @@ mark {
   box-decoration-break: clone;
 }
 
+.offline-highlight {
+  background: linear-gradient(120deg, rgba(99, 102, 241, 0.3), rgba(139, 92, 246, 0.3));
+  color: inherit;
+  padding: 0.1em 0.2em;
+  border-radius: 3px;
+  box-decoration-break: clone;
+}
+
 [data-theme="dark"] mark {
   background: linear-gradient(120deg, rgba(246, 173, 85, 0.3), rgba(237, 137, 54, 0.3));
+}
+
+[data-theme="dark"] .offline-highlight {
+  background: linear-gradient(120deg, rgba(99, 102, 241, 0.4), rgba(139, 92, 246, 0.4));
 }
 
 /* Animation for new logs */
@@ -1158,4 +1170,55 @@ mark {
 .mode-toggle-btn.offline:hover {
   background-color: var(--bs-secondary-dark);
   border-color: var(--bs-secondary-dark);
+}
+
+/* Offline Search Styles */
+.offline-search-wrapper {
+  min-width: 250px;
+}
+
+.offline-search-wrapper .input-group {
+  background: var(--bs-body-bg);
+  border-radius: 0.5rem;
+  border: 1px solid var(--bs-border-color);
+  transition: all 0.2s ease;
+}
+
+.offline-search-wrapper .input-group:focus-within {
+  border-color: var(--bs-primary);
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+.offline-search-wrapper .input-group-text {
+  background: transparent;
+  border: none;
+  color: var(--bs-secondary);
+}
+
+.offline-search-wrapper .form-control {
+  border: none;
+  padding: 0.5rem;
+  background: transparent;
+  color: var(--bs-body-color);
+}
+
+.offline-search-wrapper .form-control:focus {
+  box-shadow: none;
+}
+
+[data-theme="dark"] .offline-search-wrapper .input-group {
+  background: var(--bs-dark);
+  border-color: var(--bs-border-color);
+}
+
+[data-theme="dark"] .offline-search-wrapper .input-group-text {
+  color: var(--bs-light);
+}
+
+[data-theme="dark"] .offline-search-wrapper .form-control {
+  color: var(--bs-light);
+}
+
+[data-theme="dark"] .offline-search-wrapper .form-control::placeholder {
+  color: var(--bs-gray-500);
 }

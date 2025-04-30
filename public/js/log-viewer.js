@@ -46,6 +46,7 @@ const state = {
   logs: [],
   filteredLogs: [],
   searchTerm: '',
+  offlineSearchTerm: '',
   timeRange: '24h',
   logLevel: 'all',
   functionName: '',
@@ -61,6 +62,8 @@ const state = {
 // DOM Elements
 const logContainer = document.getElementById('logContainer');
 const searchInput = document.getElementById('searchInput');
+const offlineSearchInput = document.getElementById('offlineSearchInput');
+const offlineSearchWrapper = document.querySelector('.offline-search-wrapper');
 const timeRangeSelect = document.getElementById('timeRange');
 const logLevelSelect = document.getElementById('logLevel');
 const functionSelect = document.getElementById('functionSelect');
@@ -194,6 +197,9 @@ function toggleMode() {
     modeToggle.innerHTML = '<i class="fas fa-wifi"></i> Online Mode';
     modeToggle.classList.remove('offline');
     modeToggle.classList.add('online');
+    // Keep offline search visible but clear its value
+    state.offlineSearchTerm = '';
+    if (offlineSearchInput) offlineSearchInput.value = '';
   } else {
     modeToggle.innerHTML = '<i class="fas fa-database"></i> Offline Mode';
     modeToggle.classList.remove('online');
@@ -488,9 +494,9 @@ function applyLocalFilters() {
     );
   }
   
-  // Apply search term filter
-  if (state.searchTerm) {
-    const searchTerm = state.searchTerm.toLowerCase();
+  // Apply offline search term filter
+  if (state.offlineSearchTerm) {
+    const searchTerm = state.offlineSearchTerm.toLowerCase();
     filtered = filtered.filter(log => {
       // Search in text payload
       if (log.textPayload && log.textPayload.toLowerCase().includes(searchTerm)) {
@@ -524,7 +530,6 @@ function applyLocalFilters() {
       if (log.timestamp) {
         let timestampStr;
         if (typeof log.timestamp === 'object' && log.timestamp.seconds) {
-          // Handle Google Cloud timestamp format
           const date = new Date(log.timestamp.seconds * 1000 + (log.timestamp.nanos || 0) / 1000000);
           timestampStr = date.toISOString();
         } else if (typeof log.timestamp === 'string') {
@@ -698,6 +703,11 @@ function formatMessage(message) {
         const searchRegex = new RegExp(`(${escapeRegExp(state.searchTerm)})`, 'gi');
         jsonString = jsonString.replace(searchRegex, '<mark>$1</mark>');
       }
+      // Add offline search term highlighting
+      if (state.offlineSearchTerm) {
+        const offlineSearchRegex = new RegExp(`(${escapeRegExp(state.offlineSearchTerm)})`, 'gi');
+        jsonString = jsonString.replace(offlineSearchRegex, '<span class="offline-highlight">$1</span>');
+      }
       return `<pre class="json-content">${jsonString}</pre>`;
     }
     
@@ -707,6 +717,10 @@ function formatMessage(message) {
       const searchRegex = new RegExp(`(${escapeRegExp(state.searchTerm)})`, 'gi');
       textContent = textContent.replace(searchRegex, '<mark>$1</mark>');
     }
+    if (state.offlineSearchTerm) {
+      const offlineSearchRegex = new RegExp(`(${escapeRegExp(state.offlineSearchTerm)})`, 'gi');
+      textContent = textContent.replace(offlineSearchRegex, '<span class="offline-highlight">$1</span>');
+    }
     return `<pre class="text-content">${textContent}</pre>`;
   } catch (e) {
     // If parsing fails, return as plain text with highlighting
@@ -714,6 +728,10 @@ function formatMessage(message) {
     if (state.searchTerm) {
       const searchRegex = new RegExp(`(${escapeRegExp(state.searchTerm)})`, 'gi');
       textContent = textContent.replace(searchRegex, '<mark>$1</mark>');
+    }
+    if (state.offlineSearchTerm) {
+      const offlineSearchRegex = new RegExp(`(${escapeRegExp(state.offlineSearchTerm)})`, 'gi');
+      textContent = textContent.replace(offlineSearchRegex, '<span class="offline-highlight">$1</span>');
     }
     return `<pre class="text-content">${textContent}</pre>`;
   }
@@ -786,14 +804,26 @@ function setupEventListeners() {
       state.searchTerm = newSearchTerm;
       state.isSearchView = !!newSearchTerm;
       
-      if (!state.isOnlineMode) {
-        // In offline mode, apply filters immediately
+      // Check if the search term looks like an execution ID
+      const isExecutionId = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(newSearchTerm);
+      
+      if (!state.isOnlineMode && !isExecutionId) {
+        // In offline mode, apply filters immediately for non-execution ID searches
         applyLocalFilters();
         renderLogs();
       } else {
-        // In online mode, update URL and reload
+        // For execution IDs or in online mode, update URL and reload
         updateURLState();
       }
+    }, 300));
+  }
+
+  // Offline search input
+  if (offlineSearchInput) {
+    offlineSearchInput.addEventListener('input', debounce(() => {
+      state.offlineSearchTerm = offlineSearchInput.value.trim();
+      applyLocalFilters();
+      renderLogs();
     }, 300));
   }
 

@@ -99,8 +99,18 @@
           <i class="fas fa-wifi"></i> Online Mode
         </button>
       </div>
-      <div class="log-count-container">
-        <span id="logCount" class="log-count-badge">0 logs</span>
+      <div class="d-flex align-items-center gap-3">
+        <div class="offline-search-wrapper">
+          <div class="input-group">
+            <span class="input-group-text">
+              <i class="fas fa-filter"></i>
+            </span>
+            <input type="text" class="form-control" id="offlineSearchInput" placeholder="Filter offline logs...">
+          </div>
+        </div>
+        <div class="log-count-container">
+          <span id="logCount" class="log-count-badge">0 logs</span>
+        </div>
       </div>
     </div>
 
