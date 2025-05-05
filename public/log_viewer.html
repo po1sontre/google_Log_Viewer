@@ -95,9 +95,12 @@
     <!-- Mode Toggle and Log Count -->
     <div class="d-flex justify-content-between align-items-center my-3">
       <div class="mode-toggle">
-        <button id="modeToggle" class="btn btn-outline-primary mode-toggle-btn">
-          <i class="fas fa-wifi"></i> Online Mode
-        </button>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="modeToggle" checked>
+          <label class="form-check-label" for="modeToggle">
+            <span class="mode-label">Online Mode</span>
+          </label>
+        </div>
       </div>
       <div class="d-flex align-items-center gap-3">
         <div class="offline-search-wrapper">
@@ -121,6 +124,14 @@
   <!-- Bootstrap JS Bundle with Popper -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <!-- Custom JavaScript -->
-  <script src="js/log-viewer.js"></script>
+  <script type="module" src="js/theme.js"></script>
+  <script type="module" src="js/state.js"></script>
+  <script type="module" src="js/cache.js"></script>
+  <script type="module" src="js/utils.js"></script>
+  <script type="module" src="js/ui.js"></script>
+  <script type="module" src="js/filters.js"></script>
+  <script type="module" src="js/api.js"></script>
+  <script type="module" src="js/events.js"></script>
+  <script type="module" src="js/main.js"></script>
 </body>
 </html>
