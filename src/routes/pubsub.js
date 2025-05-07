@@ -6,7 +6,7 @@ const fs = require('fs');
 const router = express.Router();
 
 // Load the service account credentials
-const credentialsPath = path.join(__dirname, '../../nanea-pubsub-key.json');
+const credentialsPath = path.join(__dirname, '../../pubsub-key.json');
 let credentials;
 try {
   const fileContent = fs.readFileSync(credentialsPath, 'utf8');

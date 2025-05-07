@@ -3,7 +3,7 @@ const path = require('path');
 
 // Initialize PubSub client with credentials
 const pubsub = new PubSub({
-  keyFilename: path.join(__dirname, '../../nanea-pubsub-key.json'),
+  keyFilename: path.join(__dirname, '../../pubsub-key.json'),
   projectId: 'partners-nanea-pubsub'
 });
 

@@ -4,7 +4,7 @@ const fs = require('fs');
 
 // Try to get credentials path from environment variable or use default
 const CREDENTIALS_FILE = process.env.GOOGLE_APPLICATION_CREDENTIALS || 
-                         path.join(__dirname, '../../arcum-dev-log-viewer.json');
+                         path.join(__dirname, '../../logging-key.json');
 
 // Check if credentials file exists
 if (!fs.existsSync(CREDENTIALS_FILE)) {

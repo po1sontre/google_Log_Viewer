@@ -41,7 +41,7 @@ coverage
 .env.production.local
 
 # Project specific
-arcum-dev-log-viewer.json
+logging-key.json
 backup/
 old/
 *.bak
@@ -59,7 +59,7 @@ out/
 .eslintcache
 
 # PubSub key
-nanea-pubsub-key.json
+pubsub-key.json
 orderformat.json
 info.txt
 public/js/pubsub/utils/credentials.js
