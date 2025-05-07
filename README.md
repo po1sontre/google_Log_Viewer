@@ -96,6 +96,7 @@ log-viewer/
 ├── server.js           # Express server
 ├── .env               # Environment variables
 └── logging-key.json # Google Cloud credentials
+└── pubsub-key.json
 ```
 
 ## API Endpoints
