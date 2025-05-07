@@ -27,13 +27,35 @@ A modern web application for viewing and filtering Google Cloud Functions logs. 
 1. **Environment Variables** (`.env`):
 ```
 PORT=3001
-GOOGLE_APPLICATION_CREDENTIALS=./service-account-key.json
+GOOGLE_APPLICATION_CREDENTIALS=./logging-key.json
 ```
 
-2. **Service Account Key** (`service-account-key.json`):
+2. **Service Account Keys**:
+You need to create the following JSON files with your Google Cloud credentials:
+
+a. `logging-key.json`:
 - Download from Google Cloud Console
 - Place in project root
-- Ensure it has Cloud Logging access
+- Must have Cloud Logging access
+- This is the main credentials file used by the application
+- Can be specified via GOOGLE_APPLICATION_CREDENTIALS environment variable
+
+b. `pubsub-key.json`:
+- Download from Google Cloud Console
+- Place in project root
+- Must have PubSub access
+- Required for PubSub functionality
+
+3. **Public Configuration** (`public/js/pubsub/utils/credentials.js`):
+Create this file with your project configuration:
+```javascript
+export const credentials = {
+  projectId: 'your-project-id',
+  partnerId: 'your-partner-id',
+  topic: 'your-topic-name',
+  subscription: 'your-subscription-name'
+};
+```
 
 ## Installation
 
@@ -53,8 +75,8 @@ npm install
   ```bash
   cp .env.example .env
   ```
-- Replace `your-project-id` with your actual Google Cloud project ID
-- Add your service account key file
+- Create all required JSON files as described above
+- Update the credentials.js file with your project details
 
 4. Start the server:
 ```bash
@@ -73,7 +95,7 @@ log-viewer/
 │   └── log_viewer.html # Main HTML file
 ├── server.js           # Express server
 ├── .env               # Environment variables
-└── service-account-key.json # Google Cloud credentials
+└── logging-key.json # Google Cloud credentials
 ```
 
 ## API Endpoints
@@ -103,7 +125,7 @@ log-viewer/
 
 - Never commit sensitive files:
   - `.env`
-  - `service-account-key.json`
+  - `logging-key.json`
   - Any other credentials
 - Keep service account keys secure
 - Use environment variables for configuration

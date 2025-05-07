@@ -1261,3 +1261,34 @@ mark {
 [data-theme="dark"] .offline-search-wrapper .form-control::placeholder {
   color: var(--bs-gray-500);
 }
+
+/* PubSub Navigation Button */
+.pubsub-nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-weight: 500;
+  border-radius: 0.5rem;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.pubsub-nav-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.pubsub-nav-btn i {
+  font-size: 1rem;
+}
+
+[data-theme="dark"] .pubsub-nav-btn {
+  color: var(--bs-light);
+  border-color: var(--bs-primary);
+}
+
+[data-theme="dark"] .pubsub-nav-btn:hover {
+  background-color: var(--bs-primary);
+  color: white;
+}

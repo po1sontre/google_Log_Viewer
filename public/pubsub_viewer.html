@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PubSub Viewer</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Font Awesome -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bs-body-bg: #f8f9fa;
+      --bs-body-color: #212529;
+      --card-bg: #ffffff;
+      --card-border: #dee2e6;
+      --text-muted: #6c757d;
+      --accent-color: #7c4dff;
+      --accent-hover: #6c3ce9;
+      --accent-light: rgba(124, 77, 255, 0.1);
+      --danger-color: #ff4d6d;
+    }
+
+    /* OLED Dark Theme */
+    [data-bs-theme="dark"] {
+      --bs-body-bg: #000000;
+      --bs-body-color: #f8f9fa;
+      --card-bg: #121212;
+      --card-border: #2a2a2a;
+      --card-header-bg: #1a1a1a;
+      --text-muted: #a0a0a0;
+      --accent-color: #7c4dff;
+      --accent-hover: #9e7bff;
+      --accent-light: rgba(124, 77, 255, 0.15);
+      --danger-color: #ff4d6d;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bs-body-bg);
+      color: var(--bs-body-color);
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    .app-title {
+      font-weight: 700;
+      margin: 0;
+      color: var(--bs-body-color);
+      background: linear-gradient(90deg, var(--accent-color), #c77dff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .filter-card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+      margin-bottom: 2rem;
+      transition: background-color 0.3s ease, border-color 0.3s ease;
+      overflow: visible;
+    }
+
+    .card-body {
+      padding: 1.5rem;
+    }
+
+    .topic-selector {
+      position: relative;
+      width: 100%;
+      z-index: 10;
+      overflow: visible;
+    }
+
+    .topic-search {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      background-color: rgba(255,255,255,0.05);
+      color: var(--bs-body-color);
+      transition: all 0.3s ease;
+    }
+
+    .topic-search:focus {
+      border-color: var(--accent-color);
+      box-shadow: 0 0 0 0.2rem rgba(124, 77, 255, 0.25);
+      outline: none;
+    }
+
+    .topic-dropdown-menu {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background-color: var(--card-bg);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+      max-height: 400px;
+      overflow-y: auto;
+      z-index: 10000;
+      margin-top: 8px;
+      padding: 0.5rem 0;
+    }
+
+    .topic-dropdown-menu.show {
+      display: block;
+    }
+
+    .topic-header {
+      padding: 0.75rem 1rem;
+      background-color: var(--card-header-bg);
+      border-bottom: 1px solid var(--card-border);
+      margin-bottom: 0.25rem;
+    }
+
+    .topic-name {
+      font-weight: 500;
+      color: var(--bs-body-color);
+    }
+
+    .subscription-item {
+      padding-left: 2rem !important;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+
+    .subscription-item:hover {
+      background-color: var(--accent-light);
+      color: var(--accent-color);
+    }
+
+    .topic-separator {
+      height: 1px;
+      background-color: var(--card-border);
+      margin: 0.5rem 0;
+    }
+
+    .topic-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem 1rem;
+      color: var(--bs-body-color);
+      text-decoration: none;
+      transition: background-color 0.2s ease;
+      cursor: pointer;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .topic-item:last-child {
+      border-bottom: none;
+    }
+
+    .topic-item:hover {
+      background-color: var(--accent-light);
+    }
+
+    .topic-status {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.75rem;
+      border-radius: 20px;
+      font-weight: 500;
+      margin-left: 0.5rem;
+    }
+
+    .status-active { 
+      background-color: rgba(25, 135, 84, 0.2); 
+      color: #2ecc71; 
+      border: 1px solid rgba(25, 135, 84, 0.3);
+    }
+    
+    .status-inactive { 
+      background-color: rgba(255, 193, 7, 0.2); 
+      color: #ffc107; 
+      border: 1px solid rgba(255, 193, 7, 0.3);
+    }
+    
+    .status-error { 
+      background-color: rgba(220, 53, 69, 0.2); 
+      color: #ff4d6d; 
+      border: 1px solid rgba(220, 53, 69, 0.3);
+    }
+
+    .custom-select {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      background-color: rgba(255,255,255,0.05);
+      color: var(--bs-body-color);
+      transition: all 0.3s ease;
+      margin-top: 0.5rem;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%237c4dff' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 1rem center;
+      background-size: 16px 12px;
+    }
+
+    .custom-select:focus {
+      border-color: var(--accent-color);
+      box-shadow: 0 0 0 0.2rem rgba(124, 77, 255, 0.25);
+      outline: none;
+    }
+
+    .message-container {
+      display: grid;
+      gap: 1.5rem;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    }
+
+    .message-item {
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+      transition: all 0.3s ease;
+      overflow: hidden;
+    }
+
+    .message-item:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 12px 20px rgba(0,0,0,0.3);
+      border-color: var(--accent-color);
+    }
+
+    .message-header {
+      background-color: var(--card-header-bg);
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .message-content {
+      padding: 1.5rem;
+    }
+
+    .order-details {
+      font-family: 'Inter', sans-serif;
+    }
+
+    .order-header {
+      margin-bottom: 1.25rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .order-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+
+    .order-number {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--bs-body-color);
+    }
+
+    .order-status {
+      padding: 0.35rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+
+    .order-meta {
+      display: flex;
+      justify-content: space-between;
+      color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+
+    .order-items {
+      margin: 1.25rem 0;
+    }
+
+    .order-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .item-name {
+      flex: 1;
+      margin-right: 1rem;
+      color: var(--bs-body-color);
+    }
+
+    .item-quantity {
+      color: var(--text-muted);
+      margin-right: 1rem;
+    }
+
+    .item-price {
+      font-weight: 500;
+      color: var(--bs-body-color);
+    }
+
+    .order-summary {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 1.25rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--card-border);
+    }
+
+    .customer-info {
+      color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+
+    .payment-info {
+      text-align: right;
+    }
+
+    .total {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--accent-color);
+      margin-bottom: 0.25rem;
+    }
+
+    .payment-type {
+      color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+
+    .message-time {
+      color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+
+    .btn-danger {
+      background-color: var(--danger-color);
+      border-color: var(--danger-color);
+      padding: 0.35rem 0.75rem;
+      font-size: 0.875rem;
+      border-radius: 20px;
+    }
+
+    .btn-danger:hover {
+      background-color: #ff2952;
+      border-color: #ff2952;
+    }
+
+    .btn-outline-primary {
+      color: var(--accent-color);
+      border-color: var(--accent-color);
+      border-radius: 12px;
+      padding: 0.5rem 1.25rem;
+      transition: all 0.3s ease;
+    }
+
+    .btn-outline-primary:hover {
+      background-color: var(--accent-color);
+      border-color: var(--accent-color);
+      color: white;
+    }
+
+    .theme-toggle {
+      position: relative;
+      width: 60px;
+      height: 30px;
+    }
+
+    .theme-toggle-input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .theme-toggle-label {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #2d3238;
+      border-radius: 30px;
+      transition: .4s;
+      box-shadow: inset 0 0 5px rgba(0,0,0,0.5);
+    }
+
+    .theme-toggle-label:before {
+      position: absolute;
+      content: "";
+      height: 22px;
+      width: 22px;
+      left: 4px;
+      bottom: 4px;
+      background: linear-gradient(145deg, #ffffff, #e6e6e6);
+      border-radius: 50%;
+      transition: .4s;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    }
+
+    .theme-toggle-input:checked + .theme-toggle-label {
+      background-color: var(--accent-color);
+    }
+
+    .theme-toggle-input:checked + .theme-toggle-label:before {
+      transform: translateX(30px);
+    }
+
+    .theme-toggle-label i {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      color: white;
+      font-size: 14px;
+    }
+
+    .theme-toggle-label .fa-sun {
+      left: 8px;
+    }
+
+    .theme-toggle-label .fa-moon {
+      right: 8px;
+    }
+
+    .theme-toggle-input:checked + .theme-toggle-label .fa-sun {
+      color: white;
+    }
+
+    .theme-toggle-input:checked + .theme-toggle-label .fa-moon {
+      color: white;
+    }
+
+    .auto-refresh-container {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .auto-refresh-toggle {
+      width: 44px;
+      height: 22px;
+      position: relative;
+      appearance: none;
+      background-color: #2d3238;
+      border-radius: 22px;
+      cursor: pointer;
+      transition: .4s;
+      box-shadow: inset 0 0 5px rgba(0,0,0,0.5);
+    }
+
+    .auto-refresh-toggle:checked {
+      background-color: var(--accent-color);
+    }
+
+    .auto-refresh-toggle:before {
+      content: "";
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      top: 2px;
+      left: 2px;
+      background: linear-gradient(145deg, #ffffff, #e6e6e6);
+      transition: .4s;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    }
+
+    .auto-refresh-toggle:checked:before {
+      transform: translateX(22px);
+    }
+
+    .auto-refresh-text {
+      color: var(--bs-body-color);
+      font-size: 0.875rem;
+    }
+
+    .logs-nav-btn {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1.25rem;
+      border-radius: 12px;
+      transition: all 0.3s ease;
+      color: var(--accent-color);
+      border-color: var(--accent-color);
+    }
+
+    .logs-nav-btn:hover {
+      background-color: var(--accent-color);
+      color: white;
+      border-color: var(--accent-color);
+    }
+
+    .toast {
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    }
+
+    .toast-body {
+      color: var(--bs-body-color);
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--card-bg);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #444;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--accent-color);
+    }
+
+    /* Glow effects for premium feel */
+    .app-title::after {
+      content: '';
+      position: absolute;
+      width: 100%;
+      height: 10px;
+      background: radial-gradient(ellipse at center, rgba(124, 77, 255, 0.3) 0%, rgba(124, 77, 255, 0) 70%);
+      bottom: -10px;
+      left: 0;
+      pointer-events: none;
+    }
+
+    .filter-card::before {
+      content: '';
+      position: absolute;
+      top: -2px;
+      left: -2px;
+      right: -2px;
+      bottom: -2px;
+      background: linear-gradient(45deg, var(--accent-color), transparent, var(--accent-color));
+      z-index: -1;
+      border-radius: 18px;
+      opacity: 0.1;
+      animation: borderGlow 3s ease-in-out infinite;
+    }
+
+    @keyframes borderGlow {
+      0%, 100% { opacity: 0.1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* Subtle animations */
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.02); }
+    }
+
+    .btn-outline-primary:hover {
+      animation: pulse 1s infinite;
+    }
+
+    /* Glass morphism effect for cards */
+    .message-item {
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      background-color: rgba(18, 18, 18, 0.8);
+      border: 1px solid rgba(42, 42, 42, 0.7);
+    }
+
+    /* Neon accent for active elements */
+    .btn-outline-primary:focus, 
+    .topic-search:focus,
+    .custom-select:focus {
+      box-shadow: 0 0 15px rgba(124, 77, 255, 0.5);
+    }
+  </style>
+</head>
+<body>
+  <!-- Toast Container -->
+  <div class="toast-container position-fixed top-0 start-50 translate-middle-x p-3">
+    <div id="loadingToast" class="toast align-items-center" role="alert" aria-live="assertive" aria-atomic="true">
+      <div class="d-flex">
+        <div class="toast-body">
+          <i class="fas fa-spinner fa-spin me-2"></i>
+          Loading messages...
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <div class="d-flex align-items-center gap-3">
+        <h1 class="app-title">PubSub Viewer</h1>
+        <a href="/" class="btn btn-outline-primary logs-nav-btn">
+          <i class="fas fa-list-alt"></i> Go to Logs
+        </a>
+      </div>
+      <div class="col-auto">
+        <div class="theme-toggle">
+          <input class="theme-toggle-input" type="checkbox" id="themeToggle" checked>
+          <label class="theme-toggle-label" for="themeToggle">
+            <i class="fas fa-sun"></i>
+            <i class="fas fa-moon"></i>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Topic Selection and Filters -->
+    <div class="filter-card">
+      <div class="card-body">
+        <div class="row g-3 align-items-center">
+          <div class="col-md-6">
+            <div class="d-flex flex-row gap-2 align-items-start">
+              <div id="topicSelector" class="topic-selector" style="flex: 1 1 0;"></div>
+              <div id="subscriptionSearchContainer" class="topic-selector" style="flex: 1 1 0;">
+                <input id="subscriptionSearch" class="subscription-search" type="text" placeholder="Search subscriptions...">
+                <div id="subscriptionDropdown" class="subscription-dropdown-menu"></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="d-flex align-items-center gap-3">
+              <button id="pullMessagesBtn" class="btn btn-outline-primary">
+                <i class="fas fa-sync-alt"></i> Pull Messages
+              </button>
+              <div class="auto-refresh-container">
+                <input class="auto-refresh-toggle" type="checkbox" id="autoRefreshToggle">
+                <label class="auto-refresh-text" for="autoRefreshToggle">Auto Refresh</label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Message List -->
+    <div class="d-flex align-items-center gap-3 mb-3">
+      <input type="datetime-local" id="startTimeFilter" class="form-control" style="max-width: 220px;">
+      <span style="color: var(--text-muted);">to</span>
+      <input type="datetime-local" id="endTimeFilter" class="form-control" style="max-width: 220px;">
+      <button id="applyTimeFilter" class="btn btn-outline-primary">Filter</button>
+    </div>
+    <div id="messageContainer" class="message-container"></div>
+
+    <!-- Raw JSON Modal -->
+    <div class="modal fade" id="rawJsonModal" tabindex="-1" aria-labelledby="rawJsonModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="rawJsonModalLabel">Raw Message JSON</h5>
+            <button id="copyRawJsonBtn" type="button" class="btn btn-outline-primary btn-sm ms-2">Copy JSON</button>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <pre id="rawJsonContent" style="white-space: pre-wrap; word-break: break-all;"></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS Bundle with Popper -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Custom JavaScript -->
+  <script type="module" src="js/pubsub/index.js"></script>
+</body>
+</html>

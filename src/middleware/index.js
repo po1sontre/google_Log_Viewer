@@ -21,6 +21,11 @@ const cacheMiddleware = (duration) => {
       return next();
     }
 
+    // Skip caching for PubSub messages endpoint
+    if (/^\/api\/pubsub\/subscriptions\/.+\/messages$/.test(req.path)) {
+      return next();
+    }
+
     const key = `__express__${req.originalUrl || req.url}`;
     const cachedResponse = cache.get(key);
 

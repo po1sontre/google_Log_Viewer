@@ -57,3 +57,10 @@ out/
 .cache/
 .npm/
 .eslintcache
+
+# PubSub key
+nanea-pubsub-key.json
+orderformat.json
+info.txt
+public/js/pubsub/utils/credentials.js
+service-account-key.json
