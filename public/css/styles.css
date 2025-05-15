@@ -1,28 +1,28 @@
 :root {
-  /* Light Theme Colors */
-  --bg-color: #f8fafc;
-  --text-color: #1e293b;
-  --card-bg: #ffffff;
-  --border-color: #e2e8f0;
-  --hover-bg: #f7fafc;
-  --input-bg: #ffffff;
-  --input-border: #cbd5e0;
-  --input-focus: #4299e1;
+  /* Light Theme Colors - New Coral Theme */
+  --bg-color: #FFFFFF;
+  --text-color: #292929;
+  --card-bg: #FFFFFF;
+  --border-color: #E8E8E8;
+  --hover-bg: #FFF5F3;
+  --input-bg: #FFFFFF;
+  --input-border: #EEEEEE;
+  --input-focus: #FF8978;
   --shadow-color: rgba(0, 0, 0, 0.05);
   --shadow-hover: rgba(0, 0, 0, 0.1);
   
-  /* Log Level Colors */
-  --debug-color: #6366f1;
-  --info-color: #0ea5e9;
-  --warning-color: #f59e0b;
-  --error-color: #ef4444;
-  --critical-color: #b91c1c;
+  /* Log Level Colors - Coral Theme */
+  --debug-color: #6D85CA;
+  --info-color: #7BBBC4;
+  --warning-color: #FFB067;
+  --error-color: #FF8978;
+  --critical-color: #E05D5D;
   
-  /* Gradients */
-  --primary-gradient: linear-gradient(135deg, #3b82f6, #8b5cf6);
-  --success-gradient: linear-gradient(135deg, #10b981, #059669);
-  --warning-gradient: linear-gradient(135deg, #f59e0b, #d97706);
-  --error-gradient: linear-gradient(135deg, #ef4444, #b91c1c);
+  /* Gradients - Coral Theme */
+  --primary-gradient: linear-gradient(135deg, #FF8978, #FFAA9D);
+  --success-gradient: linear-gradient(135deg, #7BBBC4, #B1E3DB);
+  --warning-gradient: linear-gradient(135deg, #FFB067, #FFCA94);
+  --error-gradient: linear-gradient(135deg, #FF8978, #FFAA9D);
   --card-gradient: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.6));
   
   /* UI Elements */
@@ -31,44 +31,44 @@
   --button-radius: 12px;
   --transition-speed: 0.3s;
 
-  --primary-color: #3b82f6;
-  --primary-hover: #2563eb;
-  --secondary-color: #6b7280;
-  --success-color: #10b981;
-  --danger-color: #ef4444;
-  --light-bg: #f3f4f6;
-  --dark-bg: #1f2937;
-  --text-muted: #6b7280;
+  --primary-color: #FF8978;
+  --primary-hover: #FFAA9D;
+  --secondary-color: #6A6A6A;
+  --success-color: #7BBBC4;
+  --danger-color: #E05D5D;
+  --light-bg: #F8F8F8;
+  --dark-bg: #292929;
+  --text-muted: #707070;
   --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   --transition: all 0.3s ease;
 }
 
 [data-theme="dark"] {
-  /* Dark Theme Colors */
-  --bg-color: #0f172a;
-  --text-color: #e2e8f0;
-  --card-bg: #1e293b;
-  --border-color: #334155;
-  --hover-bg: #1e293b;
-  --input-bg: #1e293b;
-  --input-border: #334155;
-  --input-focus: #60a5fa;
-  --shadow-color: rgba(0, 0, 0, 0.2);
-  --shadow-hover: rgba(0, 0, 0, 0.3);
+  /* Dark Theme Colors - OLED-friendly with Coral accent */
+  --bg-color: #000000;
+  --text-color: #FFFFFF;
+  --card-bg: #121212;
+  --border-color: #2a2a2a;
+  --hover-bg: #1a1a1a;
+  --input-bg: #1a1a1a;
+  --input-border: #2a2a2a;
+  --input-focus: #FF8978;
+  --shadow-color: rgba(0, 0, 0, 0.4);
+  --shadow-hover: rgba(0, 0, 0, 0.6);
   
   /* Dark Theme Gradients */
-  --card-gradient: linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(30, 41, 59, 0.6));
+  --card-gradient: linear-gradient(135deg, rgba(18, 18, 18, 0.9), rgba(12, 12, 12, 0.6));
 
-  --primary-color: #60a5fa;
-  --primary-hover: #3b82f6;
-  --secondary-color: #9ca3af;
-  --light-bg: #1f2937;
-  --dark-bg: #111827;
-  --border-color: #374151;
-  --text-color: #f3f4f6;
-  --text-muted: #9ca3af;
-  --card-bg: #1f2937;
-  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --primary-color: #FF8978;
+  --primary-hover: #FFAA9D;
+  --secondary-color: #A0A0A0;
+  --light-bg: #121212;
+  --dark-bg: #000000;
+  --border-color: #2a2a2a;
+  --text-color: #FFFFFF;
+  --text-muted: #B0B0B0;
+  --card-bg: #121212;
+  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 /* Base Styles */
@@ -79,13 +79,16 @@ body {
   transition: var(--transition);
   line-height: 1.6;
   padding-bottom: 2rem;
-  background-image: radial-gradient(circle at top right, rgba(59, 130, 246, 0.1), transparent 70%),
-                    radial-gradient(circle at bottom left, rgba(139, 92, 246, 0.1), transparent 70%);
+  background-image: radial-gradient(circle at top right, rgba(255, 137, 120, 0.1), transparent 70%),
+                    radial-gradient(circle at bottom left, rgba(255, 170, 157, 0.1), transparent 70%);
   background-attachment: fixed;
 }
 
 [data-theme="dark"] body {
   background-color: var(--dark-bg);
+  background-image: 
+    radial-gradient(circle at top right, rgba(255, 137, 120, 0.03), transparent 70%),
+    radial-gradient(circle at bottom left, rgba(255, 170, 157, 0.03), transparent 70%);
 }
 
 /* Typography */
@@ -135,7 +138,7 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(135deg, #f6ad55, #ed8936);
+  background: linear-gradient(135deg, #FF8978, #FFAA9D);
   transition: 0.4s;
   border-radius: 36px;
   display: flex;
@@ -170,7 +173,7 @@ body {
 }
 
 .theme-toggle-input:checked + .theme-toggle-label {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  background: linear-gradient(135deg, #292929, #363636);
 }
 
 .theme-toggle-input:checked + .theme-toggle-label .theme-toggle-ball {
@@ -184,7 +187,7 @@ body {
   align-items: center;
   padding: 8px;
   border-radius: 8px;
-  background: rgba(30, 41, 59, 0.5);
+  background: rgba(41, 41, 41, 0.5);
   backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
@@ -353,11 +356,12 @@ body {
 
 /* Filter Card */
 .filter-card {
-  background: rgba(30, 41, 59, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  margin-top: 16px;
-  backdrop-filter: blur(8px);
+  border-color: var(--primary-color);
+  border-width: 1px;
+  border-style: solid;
+  border-radius: var(--border-radius);
+  background-color: var(--card-bg);
+  box-shadow: 0 4px 12px rgba(255, 137, 120, 0.1);
 }
 
 .filter-card .card-body {
@@ -396,10 +400,19 @@ body {
 .log-container {
   max-height: 70vh;
   overflow-y: auto;
-  padding-right: 5px;
+  padding: 1.5rem;
+  padding-right: 1rem;
   scroll-behavior: smooth;
   scrollbar-width: thin;
-  scrollbar-color: rgba(139, 92, 246, 0.5) transparent;
+  scrollbar-color: rgba(255, 137, 120, 0.5) transparent;
+  border-radius: 10px;
+}
+
+[data-theme="dark"] .log-container {
+  background-color: rgba(5, 5, 5, 0.7);
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.7);
+  border: 1px solid #1a1a1a;
+  padding: 2rem 1.5rem 1.5rem 1.5rem;
 }
 
 .log-container::-webkit-scrollbar {
@@ -408,11 +421,12 @@ body {
 
 .log-container::-webkit-scrollbar-track {
   background: transparent;
+  border-radius: 10px;
 }
 
 .log-container::-webkit-scrollbar-thumb {
-  background: linear-gradient(to bottom, rgba(59, 130, 246, 0.5), rgba(139, 92, 246, 0.5));
-  border-radius: 20px;
+  background: linear-gradient(to bottom, rgba(255, 137, 120, 0.5), rgba(255, 170, 157, 0.5));
+  border-radius: 10px;
 }
 
 /* Log Entry */
@@ -420,15 +434,29 @@ body {
   background: var(--card-bg);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  margin-bottom: 1rem;
-  padding: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 1.25rem;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   transition: all 0.2s ease;
+  border-left: 3px solid var(--primary-color);
+  position: relative;
+  overflow: hidden;
+}
+
+.log-entry::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: var(--primary-gradient);
+  opacity: 0.7;
 }
 
 .log-entry:hover {
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
 }
 
 .log-header {
@@ -436,7 +464,7 @@ body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
-  padding-bottom: 0.5rem;
+  padding-bottom: 0.75rem;
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -459,6 +487,7 @@ body {
 .log-badges .badge {
   font-size: 0.8rem;
   padding: 0.25rem 0.5rem;
+  background-color: var(--primary-color) !important;
 }
 
 .log-header-actions {
@@ -468,9 +497,9 @@ body {
 
 .log-content {
   margin: 1rem 0;
-  padding: 1rem;
+  padding: 1.25rem;
   background: var(--code-bg);
-  border-radius: 4px;
+  border-radius: 6px;
   overflow-x: auto;
 }
 
@@ -478,27 +507,28 @@ body {
   margin: 0;
   white-space: pre-wrap;
   word-wrap: break-word;
+  line-height: 1.6;
 }
 
 .json-content {
   color: var(--json-color);
   font-family: 'Fira Code', monospace;
-  font-size: 0.9rem;
-  line-height: 1.5;
+  font-size: 0.95rem;
+  line-height: 1.6;
 }
 
 .text-content {
   color: var(--text-color);
   font-family: 'Fira Code', monospace;
-  font-size: 0.9rem;
-  line-height: 1.5;
+  font-size: 0.95rem;
+  line-height: 1.6;
 }
 
 .log-footer {
   display: flex;
   gap: 1rem;
   margin-top: 1rem;
-  padding-top: 0.5rem;
+  padding-top: 0.75rem;
   border-top: 1px solid var(--border-color);
   font-size: 0.8rem;
   color: var(--text-muted);
@@ -537,21 +567,67 @@ body {
 
 /* Dark theme specific styles */
 [data-theme="dark"] .log-entry {
-  background: var(--dark-card-bg);
-  border-color: var(--dark-border-color);
+  background: linear-gradient(to bottom, #161616, #121212);
+  border: 1px solid #2a2a2a;
+  border-left-width: 5px;
+  box-shadow: 
+    0 6px 16px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(80, 80, 80, 0.1),
+    -5px 0 15px -5px rgba(255, 137, 120, 0.4);
+  margin-bottom: 2.5rem;
+  position: relative;
+  z-index: 1;
+  transform: translateZ(0);
+  backdrop-filter: blur(5px);
 }
 
-[data-theme="dark"] .log-content,
-[data-theme="dark"] .raw-data {
-  background: var(--dark-code-bg);
+/* More distinct visual separation between log entries */
+[data-theme="dark"] .log-container > .log-entry::after {
+  content: '';
+  position: absolute;
+  bottom: -1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 50%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 137, 120, 0.2), transparent);
 }
 
-[data-theme="dark"] .json-content {
-  color: var(--dark-json-color);
+/* Create a "floating card" effect */
+[data-theme="dark"] .log-entry {
+  transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-[data-theme="dark"] .text-content {
-  color: var(--dark-text-color);
+[data-theme="dark"] .log-entry:hover {
+  background: linear-gradient(to bottom, #1d1d1d, #161616);
+}
+
+/* High contrast for timestamps in dark mode */
+[data-theme="dark"] .log-timestamp {
+  background-color: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  color: #f0f0f0;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+/* Make badges pop in dark mode */
+[data-theme="dark"] .log-badges .badge.bg-primary {
+  background: linear-gradient(135deg, #FF8978, #FF7965) !important;
+  border: none;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* Make search highlights more visible */
+[data-theme="dark"] mark {
+  background-color: rgba(255, 137, 120, 0.5);
+  color: #FFFFFF;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  padding: 0 5px;
+  border-radius: 3px;
 }
 
 /* Copy Button */
@@ -600,11 +676,11 @@ body {
 
 /* Search Highlighting */
 mark {
-  background: linear-gradient(120deg, rgba(246, 173, 85, 0.3), rgba(237, 137, 54, 0.3));
-  color: inherit;
-  padding: 0.1em 0.2em;
+  background-color: rgba(255, 137, 120, 0.3);
+  color: var(--text-color);
+  padding: 0 3px;
   border-radius: 3px;
-  box-decoration-break: clone;
+  font-weight: 500;
 }
 
 .offline-highlight {
@@ -616,11 +692,8 @@ mark {
 }
 
 [data-theme="dark"] mark {
-  background: linear-gradient(120deg, rgba(246, 173, 85, 0.3), rgba(237, 137, 54, 0.3));
-}
-
-[data-theme="dark"] .offline-highlight {
-  background: linear-gradient(120deg, rgba(99, 102, 241, 0.4), rgba(139, 92, 246, 0.4));
+  background-color: rgba(255, 137, 120, 0.4);
+  color: #FFFFFF;
 }
 
 /* Animation for new logs */
@@ -649,8 +722,9 @@ mark {
 }
 
 [data-theme="dark"] .glass-card {
-  background: rgba(30, 41, 59, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(12, 12, 12, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
 /* Additional utility classes */
@@ -790,12 +864,13 @@ mark {
 .btn-primary {
   background-color: var(--primary-color);
   border-color: var(--primary-color);
+  color: #FFFFFF;
 }
 
 .btn-primary:hover {
   background-color: var(--primary-hover);
   border-color: var(--primary-hover);
-  transform: translateY(-1px);
+  color: #FFFFFF;
 }
 
 .btn-outline-secondary {
@@ -820,59 +895,6 @@ mark {
 .form-select:focus, .form-control:focus {
   border-color: var(--primary-color);
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
-}
-
-/* Log Container */
-.log-container {
-  margin-top: 1.5rem;
-  max-height: calc(100vh - 300px);
-  overflow-y: auto;
-  padding: 1rem;
-  border-radius: 0.75rem;
-  background-color: var(--card-bg);
-  box-shadow: var(--card-shadow);
-}
-
-/* Log Entry */
-.log-entry {
-  padding: 1rem;
-  margin-bottom: 1rem;
-  border-radius: 0.5rem;
-  background-color: var(--card-bg);
-  border: 1px solid var(--border-color);
-  transition: var(--transition);
-}
-
-.log-entry:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-.log-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.5rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.log-timestamp {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.875rem;
-  color: var(--text-muted);
-}
-
-.log-badges {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.badge {
-  padding: 0.35rem 0.65rem;
-  border-radius: 0.375rem;
-  font-weight: 500;
-  font-size: 0.75rem;
 }
 
 /* Log Count */
@@ -1291,4 +1313,217 @@ mark {
 [data-theme="dark"] .pubsub-nav-btn:hover {
   background-color: var(--bs-primary);
   color: white;
+}
+
+/* Update highlights for search terms */
+mark {
+  background-color: rgba(255, 137, 120, 0.3);
+  color: var(--text-color);
+  padding: 0 3px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+[data-theme="dark"] mark {
+  background-color: rgba(255, 137, 120, 0.4);
+  color: #FFFFFF;
+}
+
+/* Update custom selection color */
+::selection {
+  background-color: rgba(255, 137, 120, 0.4);
+  color: var(--text-color);
+}
+
+[data-theme="dark"] ::selection {
+  background-color: rgba(255, 137, 120, 0.6);
+  color: #FFFFFF;
+}
+
+/* Update log entry styling */
+.log-entry {
+  border-left: 3px solid var(--primary-color);
+}
+
+/* Update badges */
+.badge.bg-primary {
+  background-color: var(--primary-color) !important;
+}
+
+/* Update filter card */
+.filter-card {
+  border-color: var(--primary-color);
+  border-width: 1px;
+  border-style: solid;
+  border-radius: var(--border-radius);
+  background-color: var(--card-bg);
+  box-shadow: 0 4px 12px rgba(255, 137, 120, 0.1);
+}
+
+/* Update time range wrapper */
+.time-range-wrapper .custom-select {
+  border-color: var(--primary-color);
+  color: var(--text-color);
+}
+
+/* Log Level Indicators */
+.log-entry[data-level="debug"] {
+  border-left-color: var(--debug-color);
+}
+
+.log-entry[data-level="info"] {
+  border-left-color: var(--info-color);
+}
+
+.log-entry[data-level="warning"] {
+  border-left-color: var(--warning-color);
+}
+
+.log-entry[data-level="error"] {
+  border-left-color: var(--error-color);
+}
+
+.log-entry[data-level="critical"] {
+  border-left-color: var(--critical-color);
+}
+
+/* Timestamp style */
+.log-timestamp {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="dark"] .log-timestamp {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Badge improvements */
+.log-badges .badge {
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 4px;
+}
+
+/* Log Footer styling */
+.log-footer {
+  padding-top: 0.75rem;
+  margin-top: 1rem;
+  border-top: 1px solid var(--border-color);
+}
+
+[data-theme="dark"] .log-footer {
+  border-top-color: #2a2a2a;
+}
+
+/* Visual divider between logs in dark mode */
+[data-theme="dark"] .log-container > .log-entry + .log-entry {
+  position: relative;
+}
+
+[data-theme="dark"] .log-container > .log-entry + .log-entry::before {
+  content: '';
+  position: absolute;
+  top: -1.25rem;
+  left: 25%;
+  right: 25%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 137, 120, 0.15), transparent);
+}
+
+/* Dramatic log level indicators */
+[data-theme="dark"] .log-entry[data-level="debug"] {
+  border-left-color: var(--debug-color);
+  box-shadow: 
+    0 6px 16px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(80, 80, 80, 0.1),
+    -5px 0 15px -5px rgba(109, 133, 202, 0.5);
+}
+
+[data-theme="dark"] .log-entry[data-level="info"] {
+  border-left-color: var(--info-color);
+  box-shadow: 
+    0 6px 16px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(80, 80, 80, 0.1),
+    -5px 0 15px -5px rgba(123, 187, 196, 0.5);
+}
+
+[data-theme="dark"] .log-entry[data-level="warning"] {
+  border-left-color: var(--warning-color);
+  box-shadow: 
+    0 6px 16px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(80, 80, 80, 0.1),
+    -5px 0 15px -5px rgba(255, 176, 103, 0.5);
+}
+
+[data-theme="dark"] .log-entry[data-level="error"] {
+  border-left-color: var(--error-color);
+  box-shadow: 
+    0 6px 16px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(80, 80, 80, 0.1),
+    -5px 0 15px -5px rgba(255, 137, 120, 0.5);
+}
+
+[data-theme="dark"] .log-entry[data-level="critical"] {
+  border-left-color: var(--critical-color);
+  box-shadow: 
+    0 6px 16px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(80, 80, 80, 0.1),
+    -5px 0 15px -5px rgba(224, 93, 93, 0.5);
+}
+
+/* Enhance hover state */
+[data-theme="dark"] .log-entry:hover {
+  background: linear-gradient(to bottom, #1d1d1d, #161616);
+  box-shadow: 
+    0 10px 25px rgba(0, 0, 0, 0.8),
+    0 0 0 1px rgba(255, 137, 120, 0.4),
+    -5px 0 20px -5px rgba(255, 137, 120, 0.6);
+  transform: translateY(-3px) translateZ(0);
+  border-color: #333;
+}
+
+/* Enhanced header contrast */
+[data-theme="dark"] .log-header {
+  border-bottom: 1px solid #2a2a2a;
+  background: linear-gradient(180deg, rgba(30, 30, 30, 0.6), rgba(20, 20, 20, 0));
+  margin: -1.25rem -1.25rem 1rem -1.25rem;
+  padding: 1.25rem 1.25rem 1rem 1.25rem;
+  border-radius: 8px 8px 0 0;
+}
+
+/* Enhanced log content contrast */
+[data-theme="dark"] .log-content {
+  background: #090909;
+  border: 1px solid #2a2a2a;
+  box-shadow: 
+    inset 0 0 10px rgba(0, 0, 0, 0.8),
+    0 0 0 1px rgba(80, 80, 80, 0.1);
+  padding: 1.5rem;
+  margin: 1.25rem 0;
+}
+
+/* Enhanced text brightness */
+[data-theme="dark"] .text-content,
+[data-theme="dark"] .json-content {
+  color: #ffffff;
+  text-shadow: 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+/* Add subtle top highlight */
+[data-theme="dark"] .log-entry::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  opacity: 1;
 }
