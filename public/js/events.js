@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { updateURLState, readURLState } from './state.js';
+import { updateURLState, readURLState, setSearchTerm, setOfflineSearchTerm } from './state.js';
 import { loadLogs, applyLocalFilters, sortLogs } from './filters.js';
 import { renderLogs } from './ui.js';
 import { debounce } from './utils.js';
@@ -16,13 +16,16 @@ function setupEventListeners() {
   const sortDirectionBtn = document.getElementById('sortDirectionBtn');
   const modeToggle = document.getElementById('modeToggle');
   const modeLabel = document.querySelector('.mode-label');
+  const customDateRange = document.getElementById('customDateRange');
+  const startDateInput = document.getElementById('startDate');
+  const endDateInput = document.getElementById('endDate');
+  const applyCustomRangeBtn = document.getElementById('applyCustomRange');
 
   // Search input
   if (searchInput) {
     searchInput.addEventListener('input', debounce(() => {
       const newSearchTerm = searchInput.value.trim();
-      state.searchTerm = newSearchTerm;
-      state.isSearchView = !!newSearchTerm;
+      setSearchTerm(newSearchTerm);
       if (state.isOnlineMode) {
         updateURLState();
       } else {
@@ -35,7 +38,7 @@ function setupEventListeners() {
   // Offline search input
   if (offlineSearchInput) {
     offlineSearchInput.addEventListener('input', debounce(() => {
-      state.offlineSearchTerm = offlineSearchInput.value.trim();
+      setOfflineSearchTerm(offlineSearchInput.value.trim());
       applyLocalFilters();
       renderLogs();
     }, 300));
@@ -45,11 +48,47 @@ function setupEventListeners() {
   if (timeRangeSelect) {
     timeRangeSelect.addEventListener('change', () => {
       state.timeRange = timeRangeSelect.value;
-      if (state.isOnlineMode) {
+      
+      // Show/hide custom date range
+      if (customDateRange) {
+        if (state.timeRange === 'custom') {
+          customDateRange.style.display = 'block';
+        } else {
+          customDateRange.style.display = 'none';
+          // Clear custom range values when switching away
+          state.customDateRange.start = null;
+          state.customDateRange.end = null;
+        }
+      }
+      
+      if (state.isOnlineMode && state.timeRange !== 'custom') {
         updateURLState();
-      } else {
+      } else if (!state.isOnlineMode) {
         applyLocalFilters();
         renderLogs();
+      }
+    });
+  }
+
+  // Apply custom date range button
+  if (applyCustomRangeBtn) {
+    applyCustomRangeBtn.addEventListener('click', () => {
+      if (startDateInput && endDateInput) {
+        const startValue = startDateInput.value;
+        const endValue = endDateInput.value;
+        
+        if (!startValue || !endValue) {
+          alert('Please select both start and end date/time');
+          return;
+        }
+        
+        // Store values in state
+        state.customDateRange.start = startValue;
+        state.customDateRange.end = endValue;
+        
+        if (state.isOnlineMode) {
+          updateURLState();
+        }
       }
     });
   }
@@ -138,7 +177,7 @@ function setupEventListeners() {
         updateURLState();
         loadLogs();
       } else {
-        state.offlineSearchTerm = '';
+        setOfflineSearchTerm('');
         if (offlineSearchInput) offlineSearchInput.value = '';
         applyLocalFilters();
         renderLogs();
@@ -196,31 +235,32 @@ export function toggleMode() {
   if (state.isOnlineMode) {
     updateURLState();
   } else {
-    state.offlineSearchTerm = '';
+    setOfflineSearchTerm('');
     if (offlineSearchInput) offlineSearchInput.value = '';
     applyLocalFilters();
     renderLogs();
   }
 }
 
+// Auto refresh interval
+let autoRefreshInterval;
+
 // Start auto refresh
 function startAutoRefresh() {
-  if (state.autoRefreshInterval) {
-    clearInterval(state.autoRefreshInterval);
-  }
-  state.autoRefreshInterval = setInterval(() => {
+  stopAutoRefresh();
+  autoRefreshInterval = setInterval(() => {
     if (state.isOnlineMode) {
       loadLogs();
     }
-  }, 30000); // Refresh every 30 seconds
+  }, 30000);
 }
 
 // Stop auto refresh
 function stopAutoRefresh() {
-  if (state.autoRefreshInterval) {
-    clearInterval(state.autoRefreshInterval);
-    state.autoRefreshInterval = null;
+  if (autoRefreshInterval) {
+    clearInterval(autoRefreshInterval);
+    autoRefreshInterval = null;
   }
 }
 
-export { setupEventListeners };
+export { setupEventListeners, startAutoRefresh, stopAutoRefresh };

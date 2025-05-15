@@ -63,6 +63,22 @@ function processLogEntry(entry) {
   }
 }
 
+// Create a filter condition for a single search term
+function createSearchTermFilter(term) {
+  const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return `(
+    textPayload=~"${escapedTerm}" OR 
+    jsonPayload.message=~"${escapedTerm}" OR 
+    jsonPayload.error=~"${escapedTerm}" OR 
+    jsonPayload.data=~"${escapedTerm}" OR 
+    insertId=~"${escapedTerm}" OR 
+    labels.execution_id=~"${escapedTerm}" OR
+    trace=~"${escapedTerm}" OR
+    resource.labels.function_name=~"${escapedTerm}" OR
+    resource.labels.region=~"${escapedTerm}"
+  )`;
+}
+
 // Get logs with filtering and pagination
 async function getLogs({ startTime, endTime, functionName, severity, search, page = 1, pageSize = 1000, sort = 'desc' }) {
   // Create base filter
@@ -75,19 +91,19 @@ async function getLogs({ startTime, endTime, functionName, severity, search, pag
 
   // If we have a search term, add it to the filter
   let filter = baseFilter;
+  
   if (search) {
-    const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    filter = `${baseFilter} AND (
-      textPayload=~"${escapedSearch}" OR 
-      jsonPayload.message=~"${escapedSearch}" OR 
-      jsonPayload.error=~"${escapedSearch}" OR 
-      jsonPayload.data=~"${escapedSearch}" OR 
-      insertId=~"${escapedSearch}" OR 
-      labels.execution_id=~"${escapedSearch}" OR
-      trace=~"${escapedSearch}" OR
-      resource.labels.function_name=~"${escapedSearch}" OR
-      resource.labels.region=~"${escapedSearch}"
-    )`;
+    // Handle multiple search terms separated by commas
+    const searchTerms = search.split(',').map(term => term.trim()).filter(term => term);
+    
+    if (searchTerms.length > 0) {
+      // Create a filter for each search term and combine them with AND
+      const searchFilters = searchTerms.map(term => createSearchTermFilter(term));
+      const combinedSearchFilter = searchFilters.join(' AND ');
+      
+      filter = baseFilter ? `${baseFilter} AND ${combinedSearchFilter}` : combinedSearchFilter;
+      console.log('Using multi-term search filter:', filter);
+    }
   } else if (functionName) {
     filter = `${baseFilter} AND resource.labels.function_name="${functionName.split('/').pop()}" AND resource.labels.region="${functionName.split('/')[0]}"`;
   }

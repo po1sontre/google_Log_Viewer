@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { formatTimestamp, getSeverityColor, escapeRegExp, debounce } from './utils.js';
+import { formatTimestamp, getSeverityColor, escapeRegExp, debounce, highlightSearchTerms } from './utils.js';
 import { sortLogs, applyLocalFilters } from './filters.js';
 import { showError } from './utils.js';
 import { cache } from './cache.js';
@@ -165,7 +165,7 @@ function updateLogCount() {
   
   let message;
   if (filteredLogs === 0) {
-    if (state.searchTerm) {
+    if (state.searchTerms.length > 0) {
       message = 'No logs found matching your search';
     } else {
       message = 'No logs found';
@@ -195,37 +195,46 @@ function formatMessage(message) {
     
     if (typeof message === 'object') {
       let jsonString = JSON.stringify(message, null, 2);
-      if (state.searchTerm) {
-        const searchRegex = new RegExp(`(${escapeRegExp(state.searchTerm)})`, 'gi');
-        jsonString = jsonString.replace(searchRegex, '<mark>$1</mark>');
+      
+      // Highlight online search terms if any
+      if (state.searchTerms.length > 0) {
+        jsonString = highlightSearchTerms(jsonString, state.searchTerms);
       }
-      if (state.offlineSearchTerm) {
-        const offlineSearchRegex = new RegExp(`(${escapeRegExp(state.offlineSearchTerm)})`, 'gi');
-        jsonString = jsonString.replace(offlineSearchRegex, '<span class="offline-highlight">$1</span>');
+      
+      // Highlight offline search terms if any
+      if (state.offlineSearchTerms.length > 0) {
+        jsonString = highlightSearchTerms(jsonString, state.offlineSearchTerms);
       }
+      
       return `<pre class="json-content">${jsonString}</pre>`;
     }
     
     let textContent = message;
-    if (state.searchTerm) {
-      const searchRegex = new RegExp(`(${escapeRegExp(state.searchTerm)})`, 'gi');
-      textContent = textContent.replace(searchRegex, '<mark>$1</mark>');
+    
+    // Highlight online search terms if any
+    if (state.searchTerms.length > 0) {
+      textContent = highlightSearchTerms(textContent, state.searchTerms);
     }
-    if (state.offlineSearchTerm) {
-      const offlineSearchRegex = new RegExp(`(${escapeRegExp(state.offlineSearchTerm)})`, 'gi');
-      textContent = textContent.replace(offlineSearchRegex, '<span class="offline-highlight">$1</span>');
+    
+    // Highlight offline search terms if any
+    if (state.offlineSearchTerms.length > 0) {
+      textContent = highlightSearchTerms(textContent, state.offlineSearchTerms);
     }
+    
     return `<pre class="text-content">${textContent}</pre>`;
   } catch (e) {
     let textContent = message;
-    if (state.searchTerm) {
-      const searchRegex = new RegExp(`(${escapeRegExp(state.searchTerm)})`, 'gi');
-      textContent = textContent.replace(searchRegex, '<mark>$1</mark>');
+    
+    // Highlight online search terms if any
+    if (state.searchTerms.length > 0) {
+      textContent = highlightSearchTerms(textContent, state.searchTerms);
     }
-    if (state.offlineSearchTerm) {
-      const offlineSearchRegex = new RegExp(`(${escapeRegExp(state.offlineSearchTerm)})`, 'gi');
-      textContent = textContent.replace(offlineSearchRegex, '<span class="offline-highlight">$1</span>');
+    
+    // Highlight offline search terms if any
+    if (state.offlineSearchTerms.length > 0) {
+      textContent = highlightSearchTerms(textContent, state.offlineSearchTerms);
     }
+    
     return `<pre class="text-content">${textContent}</pre>`;
   }
 }
@@ -240,9 +249,14 @@ function createLogEntry(log) {
   const region = log.region || 'Unknown Region';
 
   let rawData = JSON.stringify(log, null, 2);
-  if (state.searchTerm) {
-    const searchRegex = new RegExp(`(${escapeRegExp(state.searchTerm)})`, 'gi');
-    rawData = rawData.replace(searchRegex, '<mark>$1</mark>');
+  
+  // Highlight search terms in raw data
+  if (state.searchTerms.length > 0) {
+    rawData = highlightSearchTerms(rawData, state.searchTerms);
+  }
+  
+  if (state.offlineSearchTerms.length > 0) {
+    rawData = highlightSearchTerms(rawData, state.offlineSearchTerms);
   }
 
   logEntry.innerHTML = `
@@ -326,10 +340,12 @@ function createLogEntry(log) {
         const searchInput = document.getElementById('searchInput');
         if (searchInput) {
           searchInput.value = executionId;
-          state.searchTerm = executionId;
-          state.isSearchView = true;
-          updateURLState();
-          loadLogs();
+          // Use the new setSearchTerm function from state.js
+          import('./state.js').then(({ setSearchTerm }) => {
+            setSearchTerm(executionId);
+            updateURLState();
+            loadLogs();
+          });
         }
       }
     });

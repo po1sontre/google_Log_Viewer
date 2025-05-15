@@ -20,54 +20,58 @@ function applyLocalFilters() {
     );
   }
   
-  // Apply offline search term filter
-  if (state.offlineSearchTerm) {
-    const searchTerm = state.offlineSearchTerm.toLowerCase();
+  // Apply offline search term filter - now with multiple terms support
+  if (state.offlineSearchTerms.length > 0) {
     filtered = filtered.filter(log => {
-      if (log.textPayload && log.textPayload.toLowerCase().includes(searchTerm)) {
-        return true;
-      }
-      
-      if (log.jsonPayload) {
-        const jsonString = JSON.stringify(log.jsonPayload).toLowerCase();
-        if (jsonString.includes(searchTerm)) {
+      // Return true if ALL search terms match the log
+      return state.offlineSearchTerms.every(searchTerm => {
+        const term = searchTerm.toLowerCase();
+        
+        if (log.textPayload && log.textPayload.toLowerCase().includes(term)) {
           return true;
-        }
-      }
-      
-      if (log.functionName && log.functionName.toLowerCase().includes(searchTerm)) {
-        return true;
-      }
-      
-      if (log.region && log.region.toLowerCase().includes(searchTerm)) {
-        return true;
-      }
-      
-      if (log.severity && log.severity.toLowerCase().includes(searchTerm)) {
-        return true;
-      }
-      
-      if (log.timestamp) {
-        let timestampStr;
-        if (typeof log.timestamp === 'object' && log.timestamp.seconds) {
-          const date = new Date(log.timestamp.seconds * 1000 + (log.timestamp.nanos || 0) / 1000000);
-          timestampStr = date.toISOString();
-        } else if (typeof log.timestamp === 'string') {
-          timestampStr = log.timestamp;
-        } else if (log.timestamp instanceof Date) {
-          timestampStr = log.timestamp.toISOString();
         }
         
-        if (timestampStr && timestampStr.toLowerCase().includes(searchTerm)) {
+        if (log.jsonPayload) {
+          const jsonString = JSON.stringify(log.jsonPayload).toLowerCase();
+          if (jsonString.includes(term)) {
+            return true;
+          }
+        }
+        
+        if (log.functionName && log.functionName.toLowerCase().includes(term)) {
           return true;
         }
-      }
+        
+        if (log.region && log.region.toLowerCase().includes(term)) {
+          return true;
+        }
+        
+        if (log.severity && log.severity.toLowerCase().includes(term)) {
+          return true;
+        }
+        
+        if (log.timestamp) {
+          let timestampStr;
+          if (typeof log.timestamp === 'object' && log.timestamp.seconds) {
+            const date = new Date(log.timestamp.seconds * 1000 + (log.timestamp.nanos || 0) / 1000000);
+            timestampStr = date.toISOString();
+          } else if (typeof log.timestamp === 'string') {
+            timestampStr = log.timestamp;
+          } else if (log.timestamp instanceof Date) {
+            timestampStr = log.timestamp.toISOString();
+          }
+          
+          if (timestampStr && timestampStr.toLowerCase().includes(term)) {
+            return true;
+          }
+        }
 
-      if (log.labels?.execution_id && log.labels.execution_id.toLowerCase().includes(searchTerm)) {
-        return true;
-      }
-      
-      return false;
+        if (log.labels?.execution_id && log.labels.execution_id.toLowerCase().includes(term)) {
+          return true;
+        }
+        
+        return false;
+      });
     });
   }
   
@@ -143,36 +147,90 @@ function addFilterUI() {
   const customDateRange = document.getElementById('customDateRange');
   const startDateInput = document.getElementById('startDate');
   const endDateInput = document.getElementById('endDate');
+  const applyCustomRangeBtn = document.getElementById('applyCustomRange');
+  
+  // Initialize custom date range with default values if not set
+  if (startDateInput && !startDateInput.value) {
+    const oneDayAgo = new Date(new Date().getTime() - 24 * 60 * 60 * 1000);
+    startDateInput.value = oneDayAgo.toISOString().slice(0, 16);
+  }
+  
+  if (endDateInput && !endDateInput.value) {
+    endDateInput.value = new Date().toISOString().slice(0, 16);
+  }
   
   if (timeRangeSelect) {
     timeRangeSelect.addEventListener('change', (e) => {
       if (e.target.value === 'custom') {
         if (customDateRange) {
           customDateRange.style.display = 'block';
-          const now = new Date();
-          const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000);
-          if (startDateInput) startDateInput.value = oneDayAgo.toISOString().slice(0, 16);
-          if (endDateInput) endDateInput.value = now.toISOString().slice(0, 16);
+          
+          // Set default values if not already set
+          if (!startDateInput.value) {
+            const oneDayAgo = new Date(new Date().getTime() - 24 * 60 * 60 * 1000);
+            startDateInput.value = oneDayAgo.toISOString().slice(0, 16);
+          }
+          
+          if (!endDateInput.value) {
+            endDateInput.value = new Date().toISOString().slice(0, 16);
+          }
         }
-        loadLogs();
       } else {
         if (customDateRange) {
           customDateRange.style.display = 'none';
         }
         state.timeRange = e.target.value;
-        loadLogs();
+        state.customDateRange.start = null;
+        state.customDateRange.end = null;
+        
+        if (state.isOnlineMode) {
+          loadLogs();
+        }
       }
     });
   }
   
-  function handleDateChange() {
-    if (timeRangeSelect && timeRangeSelect.value === 'custom') {
-      loadLogs();
-    }
+  // Apply custom date range button
+  if (applyCustomRangeBtn) {
+    applyCustomRangeBtn.addEventListener('click', () => {
+      if (startDateInput && endDateInput) {
+        const startValue = startDateInput.value;
+        const endValue = endDateInput.value;
+        
+        if (!startValue || !endValue) {
+          alert('Please select both start and end date/time');
+          return;
+        }
+        
+        // Store the custom date range in state
+        state.customDateRange.start = startValue;
+        state.customDateRange.end = endValue;
+        
+        if (state.isOnlineMode) {
+          loadLogs();
+        }
+      }
+    });
   }
   
-  if (startDateInput) startDateInput.addEventListener('change', handleDateChange);
-  if (endDateInput) endDateInput.addEventListener('change', handleDateChange);
+  // Date input change handlers
+  if (startDateInput) {
+    startDateInput.addEventListener('change', () => {
+      if (endDateInput && startDateInput.value > endDateInput.value) {
+        alert('Start date cannot be later than end date');
+        startDateInput.value = endDateInput.value;
+      }
+    });
+  }
+  
+  if (endDateInput) {
+    endDateInput.addEventListener('change', () => {
+      if (startDateInput && endDateInput.value < startDateInput.value) {
+        alert('End date cannot be earlier than start date');
+        endDateInput.value = startDateInput.value;
+      }
+    });
+  }
 }
 
 export { 

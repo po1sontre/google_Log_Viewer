@@ -6,7 +6,9 @@ const state = {
   logs: [],
   filteredLogs: [],
   searchTerm: '',
+  searchTerms: [], // Array to store individual search terms
   offlineSearchTerm: '',
+  offlineSearchTerms: [], // Array to store individual offline search terms
   timeRange: '24h',
   logLevel: 'all',
   functionName: '',
@@ -16,7 +18,11 @@ const state = {
   sortDirection: 'desc',
   isSearchView: false,
   history: [],
-  isOnlineMode: true  // Default to online mode
+  isOnlineMode: true,  // Default to online mode
+  customDateRange: {
+    start: null,
+    end: null
+  }
 };
 
 // DOM Elements
@@ -43,6 +49,7 @@ export function readURLState() {
   
   // Reset state to defaults
   state.searchTerm = '';
+  state.searchTerms = [];
   state.timeRange = '24h';
   state.logLevel = 'all';
   state.functionName = '';
@@ -50,10 +57,15 @@ export function readURLState() {
   state.logs = [];
   state.filteredLogs = [];
   state.isSearchView = false;
+  state.customDateRange = {
+    start: null,
+    end: null
+  };
   
   // Update state from URL parameters
   if (params.has('search')) {
     state.searchTerm = params.get('search');
+    state.searchTerms = state.searchTerm.split(',').map(term => term.trim()).filter(term => term);
     state.isSearchView = true;
   }
   if (params.has('timeRange')) {
@@ -65,6 +77,11 @@ export function readURLState() {
   if (params.has('functionName')) {
     state.functionName = params.get('functionName');
   }
+  if (params.has('startDate') && params.has('endDate')) {
+    state.customDateRange.start = params.get('startDate');
+    state.customDateRange.end = params.get('endDate');
+    state.timeRange = 'custom';
+  }
   
   // Update UI elements
   if (searchInput) searchInput.value = state.searchTerm;
@@ -73,6 +90,17 @@ export function readURLState() {
   if (functionSelect) functionSelect.value = state.functionName;
   if (sortDirectionBtn) {
     sortDirectionBtn.innerHTML = '<i class="fas fa-sort-amount-down"></i> Descending';
+  }
+
+  // Update custom date range inputs if needed
+  if (state.timeRange === 'custom') {
+    const customDateRange = document.getElementById('customDateRange');
+    const startDate = document.getElementById('startDate');
+    const endDate = document.getElementById('endDate');
+    
+    if (customDateRange) customDateRange.style.display = 'block';
+    if (startDate && state.customDateRange.start) startDate.value = state.customDateRange.start;
+    if (endDate && state.customDateRange.end) endDate.value = state.customDateRange.end;
   }
 }
 
@@ -93,6 +121,16 @@ export function updateURLState(reloadLogs = true) {
     params.set('functionName', state.functionName);
   }
   
+  // Add custom date range to URL if applicable
+  if (state.timeRange === 'custom') {
+    if (state.customDateRange.start) {
+      params.set('startDate', state.customDateRange.start);
+    }
+    if (state.customDateRange.end) {
+      params.set('endDate', state.customDateRange.end);
+    }
+  }
+  
   const newUrl = `?${params.toString()}`;
   
   if (newUrl !== window.location.search) {
@@ -104,6 +142,19 @@ export function updateURLState(reloadLogs = true) {
       loadLogs();
     }
   }
+}
+
+// Set search term and parse into array of terms
+export function setSearchTerm(term) {
+  state.searchTerm = term;
+  state.searchTerms = term.split(',').map(t => t.trim()).filter(t => t);
+  state.isSearchView = state.searchTerms.length > 0;
+}
+
+// Set offline search term and parse into array of terms
+export function setOfflineSearchTerm(term) {
+  state.offlineSearchTerm = term;
+  state.offlineSearchTerms = term.split(',').map(t => t.trim()).filter(t => t);
 }
 
 // Export state object

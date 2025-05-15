@@ -149,7 +149,7 @@ router.get('/subscriptions/:subscriptionName/messages', async (req, res) => {
       subscription: fullSubscriptionPath,
       requestBody: {
         maxMessages: parseInt(maxMessages),
-        returnImmediately: true
+        returnImmediately: false
       }
     });
     

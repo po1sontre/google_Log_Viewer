@@ -54,7 +54,10 @@
             <div class="d-flex align-items-center gap-3">
               <div class="search-wrapper flex-grow-1">
                 <i class="fas fa-search search-icon"></i>
-                <input type="text" class="search-input" id="searchInput" placeholder="Search logs...">
+                <input type="text" class="search-input" id="searchInput" placeholder="Search logs (multiple terms with comma: id,keyword)...">
+                <small class="search-help-text text-muted mt-1 d-block">
+                  Search for one or multiple terms
+                </small>
               </div>
               <div class="time-range-wrapper">
                 <select id="timeRange" class="custom-select">
@@ -63,7 +66,26 @@
                   <option value="12h">Last 12 Hours</option>
                   <option value="24h" selected>Last 24 Hours</option>
                   <option value="7d">Last 7 Days</option>
+                  <option value="custom">Custom Range</option>
                 </select>
+              </div>
+            </div>
+            <!-- Custom Date Range -->
+            <div id="customDateRange" class="mt-3" style="display: none;">
+              <div class="row g-2">
+                <div class="col-md-6">
+                  <label for="startDate" class="form-label small text-muted">Start Date & Time</label>
+                  <input type="datetime-local" id="startDate" class="form-control">
+                </div>
+                <div class="col-md-6">
+                  <label for="endDate" class="form-label small text-muted">End Date & Time</label>
+                  <input type="datetime-local" id="endDate" class="form-control">
+                </div>
+                <div class="col-12 mt-2">
+                  <button id="applyCustomRange" class="btn btn-sm btn-primary">
+                    <i class="fas fa-check"></i> Apply Range
+                  </button>
+                </div>
               </div>
             </div>
           </div>

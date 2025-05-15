@@ -41,9 +41,13 @@ async function loadLogs() {
     });
 
     if (state.isOnlineMode) {
-      if (state.searchTerm) {
+      // Handle multiple search terms
+      if (state.searchTerms.length > 0) {
+        // For server-side searching, we'll use the original comma-separated string
+        // Server should handle parsing multiple terms
         params.set('search', state.searchTerm.trim());
       }
+      
       if (state.functionName) {
         params.set('functionName', state.functionName);
       }
@@ -105,9 +109,15 @@ function getStartTime() {
   const timeRange = document.getElementById('timeRange').value;
   
   if (timeRange === 'custom') {
+    // Use the state's custom date range if available
+    if (state.customDateRange.start) {
+      return new Date(state.customDateRange.start).toISOString();
+    }
+    
+    // Otherwise, try to get from the input
     const startDate = document.getElementById('startDate').value;
     if (!startDate) {
-      throw new Error('Please select a start date');
+      throw new Error('Please select a start date and time');
     }
     return new Date(startDate).toISOString();
   }
@@ -129,9 +139,15 @@ function getEndTime() {
   const timeRange = document.getElementById('timeRange').value;
   
   if (timeRange === 'custom') {
+    // Use the state's custom date range if available
+    if (state.customDateRange.end) {
+      return new Date(state.customDateRange.end).toISOString();
+    }
+    
+    // Otherwise, try to get from the input
     const endDate = document.getElementById('endDate').value;
     if (!endDate) {
-      throw new Error('Please select an end date');
+      throw new Error('Please select an end date and time');
     }
     return new Date(endDate).toISOString();
   }
