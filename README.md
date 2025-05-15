@@ -88,10 +88,4 @@ google_log-viewer/
 2. **Search Not Working**: Verify log format, check comma-separated syntax
 3. **Performance Issues**: Reduce time range, use more specific filters
 
-## License
 
-ISC
-
----
-
-Last Updated: 2024 
