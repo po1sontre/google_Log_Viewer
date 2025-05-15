@@ -4,6 +4,26 @@ import { loadLogs, applyLocalFilters, sortLogs } from './filters.js';
 import { renderLogs } from './ui.js';
 import { debounce } from './utils.js';
 
+// Initialize UI state
+function initializeUI() {
+  const modeToggle = document.getElementById('modeToggle');
+  const searchInput = document.getElementById('searchInput');
+  const offlineSearchWrapper = document.querySelector('.offline-search-wrapper');
+  const refreshButton = document.querySelector('.refresh-button');
+  
+  if (modeToggle && searchInput && offlineSearchWrapper && refreshButton) {
+    if (state.isOnlineMode) {
+      modeToggle.checked = true;
+      offlineSearchWrapper.classList.add('hidden');
+      refreshButton.style.display = 'inline-flex';
+    } else {
+      modeToggle.checked = false;
+      offlineSearchWrapper.classList.add('visible');
+      refreshButton.style.display = 'none';
+    }
+  }
+}
+
 // Set up event listeners
 function setupEventListeners() {
   const searchInput = document.getElementById('searchInput');
@@ -20,6 +40,12 @@ function setupEventListeners() {
   const startDateInput = document.getElementById('startDate');
   const endDateInput = document.getElementById('endDate');
   const applyCustomRangeBtn = document.getElementById('applyCustomRange');
+
+  // Read URL state on page load
+  readURLState();
+  
+  // Initialize UI state
+  initializeUI();
 
   // Search input
   if (searchInput) {
@@ -157,16 +183,22 @@ function setupEventListeners() {
       const searchInput = document.getElementById('searchInput');
       const offlineSearchInput = document.getElementById('offlineSearchInput');
       const searchWrapper = document.querySelector('.search-wrapper');
+      const offlineSearchWrapper = document.querySelector('.offline-search-wrapper');
+      const refreshButton = document.querySelector('.refresh-button');
       
       if (searchInput && offlineSearchInput && searchWrapper) {
         if (state.isOnlineMode) {
           searchInput.style.display = 'block';
-          offlineSearchInput.style.display = 'none';
+          offlineSearchWrapper.classList.add('hidden');
+          offlineSearchWrapper.classList.remove('visible');
+          refreshButton.style.display = 'inline-flex';
           searchWrapper.classList.remove('offline');
           searchWrapper.classList.add('online');
         } else {
           searchInput.style.display = 'none';
-          offlineSearchInput.style.display = 'block';
+          offlineSearchWrapper.classList.remove('hidden');
+          offlineSearchWrapper.classList.add('visible');
+          refreshButton.style.display = 'none';
           searchWrapper.classList.remove('online');
           searchWrapper.classList.add('offline');
         }
@@ -181,6 +213,21 @@ function setupEventListeners() {
         if (offlineSearchInput) offlineSearchInput.value = '';
         applyLocalFilters();
         renderLogs();
+      }
+    });
+  }
+
+  // Refresh button
+  const refreshButton = document.querySelector('.refresh-button');
+  if (refreshButton) {
+    refreshButton.addEventListener('click', () => {
+      if (state.isOnlineMode) {
+        refreshButton.classList.add('loading');
+        loadLogs().finally(() => {
+          setTimeout(() => {
+            refreshButton.classList.remove('loading');
+          }, 500);
+        });
       }
     });
   }
@@ -207,6 +254,8 @@ export function toggleMode() {
   const searchInput = document.getElementById('searchInput');
   const offlineSearchInput = document.getElementById('offlineSearchInput');
   const searchWrapper = document.querySelector('.search-wrapper');
+  const offlineSearchWrapper = document.querySelector('.offline-search-wrapper');
+  const refreshButton = document.querySelector('.refresh-button');
   
   if (modeToggle) {
     modeToggle.checked = state.isOnlineMode;
@@ -220,12 +269,16 @@ export function toggleMode() {
   if (searchInput && offlineSearchInput && searchWrapper) {
     if (state.isOnlineMode) {
       searchInput.style.display = 'block';
-      offlineSearchInput.style.display = 'none';
+      offlineSearchWrapper.classList.add('hidden');
+      offlineSearchWrapper.classList.remove('visible');
+      refreshButton.style.display = 'inline-flex';
       searchWrapper.classList.remove('offline');
       searchWrapper.classList.add('online');
     } else {
       searchInput.style.display = 'none';
-      offlineSearchInput.style.display = 'block';
+      offlineSearchWrapper.classList.remove('hidden');
+      offlineSearchWrapper.classList.add('visible');
+      refreshButton.style.display = 'none';
       searchWrapper.classList.remove('online');
       searchWrapper.classList.add('offline');
     }
@@ -234,6 +287,7 @@ export function toggleMode() {
   // Update state and UI
   if (state.isOnlineMode) {
     updateURLState();
+    loadLogs();
   } else {
     setOfflineSearchTerm('');
     if (offlineSearchInput) offlineSearchInput.value = '';
